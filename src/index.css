@@ -1,0 +1,71 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&display=swap');
+
+@import "tailwindcss";
+@config "../tailwind.config.cjs";
+
+
+@layer base {
+  body {
+    @apply bg-material-surface text-material-onSurface font-['Outfit'] antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold tracking-tight;
+  }
+
+  button {
+    @apply cursor-pointer;
+  }
+}
+
+
+@layer components {
+  .m3-card {
+    @apply bg-white/40 backdrop-blur-md rounded-m3-xl shadow-m3-1 p-6 transition-all hover:shadow-m3-2;
+  }
+
+
+  .m3-button-filled {
+    @apply bg-material-primary text-material-onPrimary px-6 py-2.5 rounded-m3-xl font-medium shadow-m3-1 hover:shadow-m3-2 active:shadow-m3-1 transition-all disabled:opacity-50 cursor-pointer;
+  }
+
+
+  .m3-button-tonal {
+    @apply bg-material-secondaryContainer text-material-onSecondaryContainer px-6 py-2.5 rounded-m3-xl font-medium hover:shadow-m3-1 active:shadow-none transition-all disabled:opacity-50 cursor-pointer;
+  }
+
+
+  .m3-button-outline {
+    @apply border border-material-outline text-material-primary px-6 py-2.5 rounded-m3-xl font-medium hover:bg-material-primary/5 active:bg-material-primary/10 transition-all disabled:opacity-50 cursor-pointer;
+  }
+
+
+  .m3-input {
+    @apply bg-transparent border-b border-material-outline px-4 py-2 focus:border-b-2 focus:border-material-primary outline-none transition-all;
+  }
+
+  .m3-select {
+    @apply bg-material-surfaceVariant/50 border-b border-material-outline px-4 py-2 rounded-t-m3-xs focus:border-b-2 focus:border-material-primary outline-none transition-all;
+  }
+}
+
+@keyframes pop {
+  0% { transform: scale(0.9); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.animate-pop {
+  animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes explode {
+  0% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.2); filter: brightness(1.5); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+
+.animate-explode {
+  animation: explode 0.4s ease-out forwards;
+}
+
