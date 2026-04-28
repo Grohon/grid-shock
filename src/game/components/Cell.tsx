@@ -29,22 +29,20 @@ export default function Cell({ x, y, cell, onClick }: Props) {
     <div 
       onClick={() => onClick(x, y)}
       className={`
-        w-10 h-10 md:w-14 md:h-14 flex items-center justify-center
-        rounded-m3-md cursor-pointer select-none transition-all duration-300
-        ${owner ? playerColors[owner] : 'bg-material-surface text-material-onSurfaceVariant hover:bg-material-surfaceVariant'}
-        ${count > 0 ? 'shadow-m3-1' : 'opacity-40'}
+        aspect-square flex items-center justify-center
+        rounded-m3-xs sm:rounded-m3-sm cursor-pointer select-none transition-all duration-300
+        border border-black/20 shadow-sm
+        ${owner ? playerColors[owner] : 'bg-material-surface/60 text-material-onSurfaceVariant hover:bg-material-surfaceVariant'}
+        ${count > 0 ? 'opacity-100 ring-1 ring-white/30' : 'opacity-40'}
         ${isPopping ? 'animate-pop' : ''}
-        active:scale-90 relative overflow-hidden
+        active:scale-95 relative overflow-hidden
       `}
     >
-      <div className={`
-        flex flex-wrap gap-0.5 items-center justify-center p-1
-        transition-all duration-300 ${count > 0 ? 'scale-100' : 'scale-0'}
-      `}>
+      <div className="flex flex-wrap gap-1 items-center justify-center p-1">
         {Array.from({ length: count }).map((_, i) => (
           <div 
             key={i} 
-            className="w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-white/90 shadow-sm animate-pop" 
+            className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-3.5 md:h-3.5 rounded-full bg-white shadow-m3-1 animate-pop" 
             style={{ animationDelay: `${i * 0.05}s` }}
           />
         ))}
