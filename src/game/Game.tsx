@@ -18,18 +18,30 @@ export default function Game() {
   };
 
   return (
-    <div 
+    <div
       className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 transition-all duration-1000 ease-in-out"
-      style={{ 
+      style={{
         background: rows === 0 ? '#FEF7FF' : playerBackgrounds[currentPlayer],
       }}
     >
 
       <div className="w-full max-w-4xl space-y-8">
-        <header className="text-center space-y-2">
-          <h1 className="text-5xl md:text-6xl font-bold text-material-primary tracking-tight">Grid Shock</h1>
-          <p className="text-material-onSurfaceVariant text-lg">A game of tactical chain reactions</p>
+        <header className="text-center space-y-4">
+          {rows === 0 && (
+            <div className="flex justify-center mb-2">
+              <img
+                src="/grid-shock-128x128.png"
+                alt="Grid Shock Logo"
+                className="w-24 h-24 md:w-32 md:h-32 rounded-2xl shadow-m3-2 animate-pop"
+              />
+            </div>
+          )}
+          <div className="space-y-1">
+            <h1 className="text-5xl md:text-6xl font-bold text-material-primary tracking-tight">Grid Shock</h1>
+            <p className="text-material-onSurfaceVariant text-lg">A game of tactical chain reactions</p>
+          </div>
         </header>
+
 
 
         <main className="flex flex-col items-center">
@@ -42,7 +54,7 @@ export default function Game() {
             <div className="space-y-6 w-full flex flex-col items-center">
               <div className="m3-card w-full max-w-2xl flex flex-wrap items-center justify-between gap-4 border border-material-outline/10">
                 <div className="flex items-center gap-4">
-                  <div 
+                  <div
                     className={`w-6 h-6 rounded-full shadow-m3-1 ${isAnimating ? 'animate-pulse' : ''}`}
                     style={{ backgroundColor: currentPlayer === 1 ? '#6750A4' : '#006A6A' }}
                   />
@@ -61,7 +73,7 @@ export default function Game() {
                   </div>
                 </div>
 
-                
+
                 <div className="flex gap-2">
                   {gameOver && (
                     <button onClick={resetGame} className="m3-button-filled">
@@ -73,7 +85,7 @@ export default function Game() {
                   </button>
                 </div>
               </div>
-              
+
               <div className="relative">
                 <Board />
               </div>
