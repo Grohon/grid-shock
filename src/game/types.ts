@@ -18,6 +18,9 @@ export interface GameState {
   cols: number;
   gameOver: boolean;
   winner?: PlayerID;
+  vsComputer: boolean;
+  computerPlayer?: PlayerID;
   // Tracks whether each player has placed their initial block in fixed mode
   initialPlaced: Record<PlayerID, boolean>;
 }
+

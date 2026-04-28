@@ -52,11 +52,12 @@ export default function Game() {
                     </span>
                     <span className="text-xl font-bold text-material-onSurface">
                       {gameOver ? (
-                        `Player ${winner} Wins!`
+                        state.vsComputer && winner === state.computerPlayer ? "Bot Wins!" : `Player ${winner} Wins!`
                       ) : (
-                        isAnimating ? 'Exploding...' : `Player ${currentPlayer}`
+                        isAnimating ? 'Exploding...' : (state.vsComputer && currentPlayer === state.computerPlayer ? "Bot" : `Player ${currentPlayer}`)
                       )}
                     </span>
+
                   </div>
                 </div>
 

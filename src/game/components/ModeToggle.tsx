@@ -14,6 +14,9 @@ export default function ModeToggle() {
   const [cols, setCols] = useState(() => {
     return Number(localStorage.getItem('gameCols')) || 6;
   });
+  const [vsComputer, setVsComputer] = useState(() => {
+    return localStorage.getItem('gameVsComputer') === 'true';
+  });
 
   const [errors, setErrors] = useState<{ rows?: string; cols?: string }>({});
 
@@ -22,7 +25,8 @@ export default function ModeToggle() {
     localStorage.setItem('gameMode', mode);
     localStorage.setItem('gameRows', rows.toString());
     localStorage.setItem('gameCols', cols.toString());
-  }, [mode, rows, cols]);
+    localStorage.setItem('gameVsComputer', vsComputer.toString());
+  }, [mode, rows, cols, vsComputer]);
 
 
   const validate = () => {
@@ -36,9 +40,10 @@ export default function ModeToggle() {
 
   const start = () => {
     if (validate()) {
-      initGame(rows, cols, mode);
+      initGame(rows, cols, mode, vsComputer);
     }
   };
+
 
 
 
@@ -58,6 +63,28 @@ export default function ModeToggle() {
             <option value="fixed">Fixed (Threshold: 4)</option>
           </select>
         </div>
+
+        <div className="flex items-center justify-between p-3 rounded-m3-md bg-material-surfaceVariant/20 border border-material-outline/10">
+          <div className="flex flex-col">
+            <span className="font-medium text-material-onSurface">Vs Computer</span>
+            <span className="text-xs text-material-onSurfaceVariant">Play against an AI opponent</span>
+          </div>
+          <button
+            onClick={() => setVsComputer(!vsComputer)}
+            className={`
+              relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none
+              ${vsComputer ? 'bg-material-primary' : 'bg-material-outline/30'}
+            `}
+          >
+            <div 
+              className={`
+                absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform duration-300 shadow-sm
+                ${vsComputer ? 'translate-x-6' : 'translate-x-0'}
+              `}
+            />
+          </button>
+        </div>
+
 
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">

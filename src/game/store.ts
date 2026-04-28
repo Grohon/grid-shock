@@ -1,6 +1,7 @@
-import create from 'zustand';
+import { create } from 'zustand';
+
 import { GameState, PlayerID, Cell, Board } from './types';
-import { makeMove, getThreshold, isValidMove, getExplosionSteps, checkWin } from './engine';
+import { makeMove, getThreshold, isValidMove, getExplosionSteps, checkWin, getComputerMove } from './engine';
 
 /** Helper to create an empty board */
 function createBoard(rows: number, cols: number): Board {
@@ -18,10 +19,11 @@ function createBoard(rows: number, cols: number): Board {
 interface GameStore {
   state: GameState;
   isAnimating: boolean;
-  initGame: (rows: number, cols: number, mode: 'classic' | 'fixed') => void;
-  attemptMove: (x: number, y: number) => void;
+  initGame: (rows: number, cols: number, mode: 'classic' | 'fixed', vsComputer: boolean) => void;
+  attemptMove: (x: number, y: number) => Promise<void>;
   resetGame: () => void;
 }
+
 
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -35,27 +37,39 @@ export const useGameStore = create<GameStore>((set, get) => ({
     winner: undefined,
   },
   isAnimating: false,
-  initGame: (rows, cols, mode) => {
+  initGame: (rows, cols, mode, vsComputer) => {
     // Defensive clamping
     const r = Math.max(3, Math.min(10, rows));
     const c = Math.max(3, Math.min(10, cols));
 
     const board = createBoard(r, c);
-    set({
-      isAnimating: false,
-      state: {
-        board,
-        currentPlayer: 1 as PlayerID,
-        mode,
-        rows: r,
-        cols: c,
-        gameOver: false,
-        winner: undefined,
-        initialPlaced: { 1: false, 2: false },
-      },
-    });
-  },
+    const startPlayer = (vsComputer && Math.random() > 0.5) ? 2 : 1;
+    
+    const newState: GameState = {
+      board,
+      currentPlayer: startPlayer as PlayerID,
+      mode,
+      rows: r,
+      cols: c,
+      gameOver: false,
+      winner: undefined,
+      vsComputer,
+      computerPlayer: vsComputer ? 2 : undefined,
+      initialPlaced: { 1: false, 2: false },
+    };
 
+    set({ isAnimating: false, state: newState });
+
+    // Trigger computer move if it starts first
+    if (vsComputer && startPlayer === 2) {
+      setTimeout(async () => {
+        const currentStore = useGameStore.getState();
+        if (currentStore.isAnimating || currentStore.state.gameOver) return;
+        const move = getComputerMove(currentStore.state);
+        if (move) await currentStore.attemptMove(move[0], move[1]);
+      }, 800);
+    }
+  },
   attemptMove: async (x, y) => {
     const { state, isAnimating } = get();
     if (state.gameOver || isAnimating) return;
@@ -72,7 +86,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     targetCell.owner = placedState.currentPlayer;
 
     if (placedState.mode === 'fixed' && !placedState.initialPlaced[placedState.currentPlayer]) {
-      placedState.initialPlaced[placedState.currentPlayer] = true;
+      // We must clone the record to avoid mutating original state
+      placedState.initialPlaced = { ...placedState.initialPlaced, [placedState.currentPlayer]: true };
     }
 
     set({ state: placedState });
@@ -95,24 +110,54 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     
     set({ state: afterWin, isAnimating: false });
+
+    // 4. Trigger Computer turn if needed
+    if (!afterWin.gameOver && afterWin.vsComputer && afterWin.currentPlayer === afterWin.computerPlayer) {
+      // Small delay to ensure React/Zustand state has flushed
+      setTimeout(async () => {
+        const currentStore = useGameStore.getState();
+        if (currentStore.isAnimating || currentStore.state.gameOver) return;
+        
+        const move = getComputerMove(currentStore.state);
+        if (move) {
+          await currentStore.attemptMove(move[0], move[1]);
+        }
+      }, 600);
+    }
+
   },
 
   resetGame: () => {
-    const { rows, cols, mode } = get().state;
+    const { rows, cols, mode, vsComputer } = get().state;
     const board = createBoard(rows, cols);
-    set({
-      state: {
-        board,
-        currentPlayer: 1 as PlayerID,
-        mode,
-        rows,
-        cols,
-        gameOver: false,
-        winner: undefined,
-        initialPlaced: { 1: false, 2: false },
-      },
-    });
+    const startPlayer = (vsComputer && Math.random() > 0.5) ? 2 : 1;
+
+    const newState: GameState = {
+      board,
+      currentPlayer: startPlayer as PlayerID,
+      mode,
+      rows,
+      cols,
+      gameOver: false,
+      winner: undefined,
+      vsComputer,
+      computerPlayer: vsComputer ? 2 : undefined,
+      initialPlaced: { 1: false, 2: false },
+    };
+
+    set({ isAnimating: false, state: newState });
+
+    // Trigger computer move if it starts first
+    if (vsComputer && startPlayer === 2) {
+      setTimeout(async () => {
+        const currentStore = useGameStore.getState();
+        if (currentStore.isAnimating || currentStore.state.gameOver) return;
+        const move = getComputerMove(currentStore.state);
+        if (move) await currentStore.attemptMove(move[0], move[1]);
+      }, 800);
+    }
   },
+
   // Clear all state to go back to setup screen
   clearGame: () => {
     set({

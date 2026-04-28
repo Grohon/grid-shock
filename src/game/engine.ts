@@ -136,8 +136,10 @@ export function makeMove(state: GameState, x: number, y: number): GameState {
 
   // In fixed mode, record that this player has placed their initial block
   if (placedState.mode === 'fixed' && !placedState.initialPlaced[placedState.currentPlayer]) {
-    placedState.initialPlaced[placedState.currentPlayer] = true;
+    // We must clone the record to avoid mutating original state
+    placedState.initialPlaced = { ...placedState.initialPlaced, [placedState.currentPlayer]: true };
   }
+
 
   const afterExplosions = resolveExplosions(placedState);
   const afterWin = checkWin(afterExplosions);
@@ -146,4 +148,182 @@ export function makeMove(state: GameState, x: number, y: number): GameState {
     afterWin.currentPlayer = afterWin.currentPlayer === 1 ? 2 : 1;
   }
   return afterWin;
+}/** Evaluate a board state from a specific player's perspective */
+function evaluateState(state: GameState, player: PlayerID): number {
+  if (state.gameOver) {
+    return state.winner === player ? 1000000 : -1000000;
+  }
+
+  const opponent = player === 1 ? 2 : 1;
+  let score = 0;
+  let ownedCells = 0;
+
+  for (let r = 0; r < state.rows; r++) {
+    for (let c = 0; c < state.cols; c++) {
+      const cell = state.board[r][c];
+      const threshold = getThreshold(r, c, state);
+      
+      if (cell.owner === player) {
+        ownedCells++;
+        score += 100; 
+        score += cell.count * 10;
+        
+        // Mode-specific strategic bonuses
+        if (state.mode === 'classic') {
+          if (threshold === 2) score += 30; // High value for corners in classic
+          else if (threshold === 3) score += 15; // Edge value
+        } else {
+          // Fixed mode: Clustering bonus (encourage contiguous blocks)
+          const dirs: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+          for (const [dx, dy] of dirs) {
+            const nr = r + dx;
+            const nc = c + dy;
+            if (inBounds(nr, nc, state) && state.board[nr][nc].owner === player) {
+              score += 20; // Bonus for adjacent owned cells
+            }
+          }
+        }
+
+        if (cell.count === threshold - 1) {
+          const dirs: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+          let isVulnerable = false;
+          for (const [dx, dy] of dirs) {
+            const nr = r + dx;
+            const nc = c + dy;
+            if (inBounds(nr, nc, state)) {
+              const neighbor = state.board[nr][nc];
+              if (neighbor.owner === opponent && neighbor.count === getThreshold(nr, nc, state) - 1) {
+                isVulnerable = true;
+                break;
+              }
+            }
+          }
+          if (isVulnerable) score -= 150;
+          else score += 50;
+        }
+      } else if (cell.owner === opponent) {
+        score -= 100;
+        score -= cell.count * 10;
+        if (cell.count === threshold - 1) score += 20;
+      } else {
+        // Empty cells - weighted by strategic importance in Classic mode
+        if (state.mode === 'classic') {
+          if (threshold === 2) score += 40; 
+          else if (threshold === 3) score += 20; 
+        }
+      }
+    }
+  }
+
+
+  // If we own no cells in a non-gameover state, something is wrong with simulation
+  if (ownedCells === 0) return -500000;
+
+  return score;
 }
+
+/** Select a move for the computer player using Minimax with Alpha-Beta Pruning */
+export function getComputerMove(state: GameState): [number, number] | null {
+  const player = state.currentPlayer;
+  const validMoves: Array<[number, number]> = [];
+  
+  for (let r = 0; r < state.rows; r++) {
+    for (let c = 0; c < state.cols; c++) {
+      if (isValidMove(state.board[r][c], player, state)) {
+        validMoves.push([r, c]);
+      }
+    }
+  }
+
+  if (validMoves.length === 0) return null;
+
+  // Strategic move ordering: prioritize explosions to make Alpha-Beta pruning more effective
+  validMoves.sort(([r1, c1], [r2, c2]) => {
+    const thresh1 = getThreshold(r1, c1, state);
+    const thresh2 = getThreshold(r2, c2, state);
+    const isCrit1 = state.board[r1][c1].count >= thresh1 - 1 ? 1 : 0;
+    const isCrit2 = state.board[r2][c2].count >= thresh2 - 1 ? 1 : 0;
+    return isCrit2 - isCrit1;
+  });
+
+  let bestScore = -Infinity;
+  let bestMoves: Array<[number, number]> = [];
+  const depth = 3; // 3-step lookahead
+
+  console.log(`[AI] Starting Minimax depth ${depth} search...`);
+  const startTime = performance.now();
+
+  for (const [r, c] of validMoves) {
+    const nextState = makeMove(state, r, c);
+    // After our move, it will be the opponent's turn (minimizing)
+    const score = minimax(nextState, depth - 1, -Infinity, Infinity, false, player);
+    
+    if (score > bestScore) {
+      bestScore = score;
+      bestMoves = [[r, c]];
+    } else if (score === bestScore) {
+      bestMoves.push([r, c]);
+    }
+  }
+
+  const endTime = performance.now();
+  const selected = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+  console.log(`[AI] Search took ${(endTime - startTime).toFixed(0)}ms. Evaluated ${validMoves.length} base moves. Selected: [${selected[0]}, ${selected[1]}] Score: ${bestScore}`);
+  
+  return selected;
+}
+
+/** Minimax algorithm with Alpha-Beta pruning */
+function minimax(
+  state: GameState, 
+  depth: number, 
+  alpha: number, 
+  beta: number, 
+  isMaximizing: boolean, 
+  aiPlayer: PlayerID
+): number {
+  // Base case: leaf node or terminal state
+  if (depth === 0 || state.gameOver) {
+    return evaluateState(state, aiPlayer);
+  }
+
+  const opponent = aiPlayer === 1 ? 2 : 1;
+  const currentPlayer = isMaximizing ? aiPlayer : opponent;
+  
+  const validMoves: Array<[number, number]> = [];
+  for (let r = 0; r < state.rows; r++) {
+    for (let c = 0; c < state.cols; c++) {
+      if (isValidMove(state.board[r][c], currentPlayer, state)) {
+        validMoves.push([r, c]);
+      }
+    }
+  }
+
+  if (validMoves.length === 0) return evaluateState(state, aiPlayer);
+
+  if (isMaximizing) {
+    let maxEval = -Infinity;
+    for (const [r, c] of validMoves) {
+      const nextState = makeMove(state, r, c);
+      const evalValue = minimax(nextState, depth - 1, alpha, beta, false, aiPlayer);
+      maxEval = Math.max(maxEval, evalValue);
+      alpha = Math.max(alpha, evalValue);
+      if (beta <= alpha) break; // Pruning
+    }
+    return maxEval;
+  } else {
+    let minEval = Infinity;
+    for (const [r, c] of validMoves) {
+      const nextState = makeMove(state, r, c);
+      const evalValue = minimax(nextState, depth - 1, alpha, beta, true, aiPlayer);
+      minEval = Math.min(minEval, evalValue);
+      beta = Math.min(beta, evalValue);
+      if (beta <= alpha) break; // Pruning
+    }
+    return minEval;
+  }
+}
+
+
+
+
