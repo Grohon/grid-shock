@@ -97,7 +97,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     
     // The first step is the placed state, so we start from the second step
     for (let i = 1; i < steps.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 500));
       set({ state: steps[i] });
     }
 

@@ -47,6 +47,19 @@
   .m3-select {
     @apply bg-material-surfaceVariant/50 border-b border-material-outline px-4 py-2 rounded-t-m3-xs focus:border-b-2 focus:border-material-primary outline-none transition-all;
   }
+
+  .m3-slider {
+    @apply appearance-none w-full h-3 bg-material-primary/10 rounded-full cursor-pointer transition-all duration-300;
+  }
+
+  .m3-slider::-webkit-slider-thumb {
+    @apply appearance-none w-6 h-6 rounded-full bg-material-primary shadow-m3-2 transition-transform duration-200 hover:scale-110 active:scale-95;
+    margin-top: -6px;
+  }
+
+  .m3-slider::-moz-range-thumb {
+    @apply w-6 h-6 rounded-full bg-material-primary border-none shadow-m3-2 transition-transform duration-200 hover:scale-110 active:scale-95;
+  }
 }
 
 @keyframes pop {
@@ -66,6 +79,6 @@
 }
 
 .animate-explode {
-  animation: explode 0.4s ease-out forwards;
+  animation: explode 0.6s ease-out forwards;
 }
 

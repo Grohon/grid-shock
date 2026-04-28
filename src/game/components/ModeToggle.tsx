@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGameStore } from '../store';
 
 export default function ModeToggle() {
@@ -15,36 +15,21 @@ export default function ModeToggle() {
     return Number(localStorage.getItem('gameCols')) || 6;
   });
   const [vsComputer, setVsComputer] = useState(() => {
-    return localStorage.getItem('gameVsComputer') === 'true';
+    const saved = localStorage.getItem('gameVsComputer');
+    return saved === null ? true : saved === 'true';
   });
 
-  const [errors, setErrors] = useState<{ rows?: string; cols?: string }>({});
-
   // Save settings to localStorage when they change
-  React.useEffect(() => {
+  useEffect(() => {
     localStorage.setItem('gameMode', mode);
     localStorage.setItem('gameRows', rows.toString());
     localStorage.setItem('gameCols', cols.toString());
     localStorage.setItem('gameVsComputer', vsComputer.toString());
   }, [mode, rows, cols, vsComputer]);
 
-
-  const validate = () => {
-    const newErrors: { rows?: string; cols?: string } = {};
-    if (rows < 3 || rows > 10) newErrors.rows = 'Must be between 3 and 10';
-    if (cols < 3 || cols > 10) newErrors.cols = 'Must be between 3 and 10';
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   const start = () => {
-    if (validate()) {
-      initGame(rows, cols, mode, vsComputer);
-    }
+    initGame(rows, cols, mode, vsComputer);
   };
-
-
 
 
   return (
@@ -86,46 +71,57 @@ export default function ModeToggle() {
         </div>
 
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-material-onSurfaceVariant ml-1">
-              Rows
-            </label>
-            <input 
-              className={`m3-input ${errors.rows ? 'border-red-500' : ''}`}
-              type="number" 
-              min={3} 
-              max={10}
-
-              value={rows} 
-              onChange={e => {
-                setRows(Number(e.target.value));
-                if (errors.rows) setErrors(prev => ({ ...prev, rows: undefined }));
-              }} 
-            />
-            {errors.rows && (
-              <span className="text-xs text-red-500 ml-1">{errors.rows}</span>
-            )}
+        <div className="space-y-8 pt-4">
+          <div className="flex flex-col gap-4">
+            <div className="flex justify-between items-center px-1">
+              <label className="text-sm font-bold text-material-onSurface">
+                Rows
+              </label>
+              <span className="text-sm font-bold text-material-primary bg-material-primary/15 px-4 py-1 rounded-full shadow-sm">
+                {rows}
+              </span>
+            </div>
+            <div className="relative">
+              <input 
+                type="range" 
+                min={3} 
+                max={10}
+                step={1}
+                value={rows} 
+                onChange={e => setRows(Number(e.target.value))}
+                className="m3-slider"
+              />
+              <div className="flex justify-between w-full px-1 mt-2 text-[10px] font-black text-material-onSurfaceVariant/40 tracking-tighter">
+                <span>3 ROWS</span>
+                <span>10 ROWS</span>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-material-onSurfaceVariant ml-1">
-              Columns
-            </label>
-            <input 
-              className={`m3-input ${errors.cols ? 'border-red-500' : ''}`}
-              type="number" 
-              min={3} 
-              max={10}
 
-              value={cols} 
-              onChange={e => {
-                setCols(Number(e.target.value));
-                if (errors.cols) setErrors(prev => ({ ...prev, cols: undefined }));
-              }} 
-            />
-            {errors.cols && (
-              <span className="text-xs text-red-500 ml-1">{errors.cols}</span>
-            )}
+          <div className="flex flex-col gap-4">
+            <div className="flex justify-between items-center px-1">
+              <label className="text-sm font-bold text-material-onSurface">
+                Columns
+              </label>
+              <span className="text-sm font-bold text-material-primary bg-material-primary/15 px-4 py-1 rounded-full shadow-sm">
+                {cols}
+              </span>
+            </div>
+            <div className="relative">
+              <input 
+                type="range" 
+                min={3} 
+                max={10}
+                step={1}
+                value={cols} 
+                onChange={e => setCols(Number(e.target.value))}
+                className="m3-slider"
+              />
+              <div className="flex justify-between w-full px-1 mt-2 text-[10px] font-black text-material-onSurfaceVariant/40 tracking-tighter">
+                <span>3 COLS</span>
+                <span>10 COLS</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

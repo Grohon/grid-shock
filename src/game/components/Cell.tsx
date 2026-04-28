@@ -50,4 +50,3 @@ export default function Cell({ x, y, cell, onClick }: Props) {
     </div>
   );
 }
-
