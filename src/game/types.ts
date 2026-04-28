@@ -1,7 +1,7 @@
 /**
  * Core type definitions for the Color Wars game.
  */
-export type PlayerID = 1 | 2;
+export type PlayerID = 1 | 2 | 3 | 4;
 
 export interface Cell {
   owner: PlayerID | null;
@@ -20,6 +20,10 @@ export interface GameState {
   winner?: PlayerID;
   vsComputer: boolean;
   computerPlayer?: PlayerID;
+  numPlayers: number;
+  gameId?: string;
+  localPlayerId?: PlayerID;
+  connectionStatus?: 'offline' | 'connecting' | 'connected' | 'disconnected';
   // Tracks whether each player has placed their initial block in fixed mode
   initialPlaced: Record<PlayerID, boolean>;
 }

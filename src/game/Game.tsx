@@ -10,6 +10,8 @@ export default function Game() {
   const playerBackgrounds = {
     1: 'linear-gradient(135deg, #F3EFFF 0%, #EADDFF 100%)',
     2: 'linear-gradient(135deg, #E0F2F1 0%, #B2DFDB 100%)',
+    3: 'linear-gradient(135deg, #FFFDE7 0%, #FFF59D 100%)',
+    4: 'linear-gradient(135deg, #FFF1F0 0%, #FFD1D1 100%)',
   };
 
   const isPlaying = rows > 0;

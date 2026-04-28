@@ -11,6 +11,8 @@ interface Props {
 const playerColors: Record<PlayerID, string> = {
   1: 'bg-material-player1 text-material-onPrimary',
   2: 'bg-material-player2 text-white',
+  3: 'bg-material-player3 text-material-onSurface',
+  4: 'bg-material-player4 text-white',
 };
 
 export default function Cell({ x, y, cell, onClick }: Props) {

@@ -3,8 +3,8 @@ import ModeToggle from './ModeToggle';
 
 export default function Home() {
   return (
-    <div className="w-full max-w-4xl flex flex-col items-center space-y-12 py-8 animate-in fade-in zoom-in duration-500">
-      <header className="text-center space-y-4 sm:space-y-6">
+    <div className="w-full max-w-4xl flex flex-col items-center gap-y-4 py-8 animate-in fade-in zoom-in duration-500">
+      <header className="text-center flex flex-col gap-y-4">
         <div className="flex justify-center">
           <div className="relative">
             <div className="absolute -inset-4 bg-material-primary/20 rounded-full blur-2xl animate-pulse" />

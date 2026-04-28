@@ -134,9 +134,7 @@ export function makeMove(state: GameState, x: number, y: number): GameState {
   targetCell.count += 1;
   targetCell.owner = placedState.currentPlayer;
 
-  // In fixed mode, record that this player has placed their initial block
-  if (placedState.mode === 'fixed' && !placedState.initialPlaced[placedState.currentPlayer]) {
-    // We must clone the record to avoid mutating original state
+  if (!placedState.initialPlaced[placedState.currentPlayer]) {
     placedState.initialPlaced = { ...placedState.initialPlaced, [placedState.currentPlayer]: true };
   }
 
@@ -145,7 +143,24 @@ export function makeMove(state: GameState, x: number, y: number): GameState {
   const afterWin = checkWin(afterExplosions);
 
   if (!afterWin.gameOver) {
-    afterWin.currentPlayer = afterWin.currentPlayer === 1 ? 2 : 1;
+    // Switch to next player, skipping those who are out
+    let nextPlayer = (afterWin.currentPlayer % afterWin.numPlayers + 1) as PlayerID;
+    
+    // Safety break to prevent infinite loop
+    let attempts = 0;
+    while (attempts < 4) {
+      // A player is out if they have placed their initial atom but now own 0 cells
+      const hasPlaced = afterWin.initialPlaced[nextPlayer];
+      const ownsCells = afterWin.board.some(row => row.some(c => c.owner === nextPlayer));
+      
+      if (!hasPlaced || ownsCells) {
+        afterWin.currentPlayer = nextPlayer;
+        break;
+      }
+      
+      nextPlayer = (nextPlayer % afterWin.numPlayers + 1) as PlayerID;
+      attempts++;
+    }
   }
   return afterWin;
 }/** Evaluate a board state from a specific player's perspective */
@@ -154,7 +169,6 @@ function evaluateState(state: GameState, player: PlayerID): number {
     return state.winner === player ? 1000000 : -1000000;
   }
 
-  const opponent = player === 1 ? 2 : 1;
   let score = 0;
   let ownedCells = 0;
 
@@ -192,7 +206,7 @@ function evaluateState(state: GameState, player: PlayerID): number {
             const nc = c + dy;
             if (inBounds(nr, nc, state)) {
               const neighbor = state.board[nr][nc];
-              if (neighbor.owner === opponent && neighbor.count === getThreshold(nr, nc, state) - 1) {
+              if (neighbor.owner !== null && neighbor.owner !== player && neighbor.count === getThreshold(nr, nc, state) - 1) {
                 isVulnerable = true;
                 break;
               }
@@ -201,7 +215,8 @@ function evaluateState(state: GameState, player: PlayerID): number {
           if (isVulnerable) score -= 150;
           else score += 50;
         }
-      } else if (cell.owner === opponent) {
+      } else if (cell.owner !== null) {
+        // Any opponent's cell
         score -= 100;
         score -= cell.count * 10;
         if (cell.count === threshold - 1) score += 20;
@@ -287,8 +302,8 @@ function minimax(
     return evaluateState(state, aiPlayer);
   }
 
-  const opponent = aiPlayer === 1 ? 2 : 1;
-  const currentPlayer = isMaximizing ? aiPlayer : opponent;
+  // Note: Multiplayer AI is simplified to treat current turn-taker as "current"
+  const currentPlayer = isMaximizing ? aiPlayer : (state.currentPlayer);
   
   const validMoves: Array<[number, number]> = [];
   for (let r = 0; r < state.rows; r++) {

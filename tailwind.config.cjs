@@ -20,6 +20,8 @@ module.exports = {
           outline: '#79747E',
           player1: '#6750A4',
           player2: '#006A6A',
+          player3: '#FFB300',
+          player4: '#D81B60',
         }
       },
       boxShadow: {
