@@ -35,8 +35,9 @@ export default function Home() {
       </main>
 
       <footer className="text-material-onSurfaceVariant/60 text-sm font-medium text-center">
-        <p>© 2025 Grid Shock. Developed by
-          <a href="https://github.com/grohon" target="_blank" rel="noopener noreferrer">Abu Foysal</a>
+        <p>
+          <span>© 2025 Grid Shock. Developed by </span>
+          <span><a href="https://github.com/grohon" target="_blank" className="text-material-primary hover:underline" rel="noopener noreferrer">Abu Foysal</a></span>
         </p>
       </footer>
     </div>
