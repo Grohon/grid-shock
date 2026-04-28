@@ -8,7 +8,7 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: [
-        "favicon.svg",
+        "favicon.png",
         "grid-shock-128x128.png",
         "grid-shock-192x192.png",
         "grid-shock-512x512.png",
