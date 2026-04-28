@@ -24,6 +24,9 @@ export interface GameState {
   gameId?: string;
   localPlayerId?: PlayerID;
   connectionStatus?: 'offline' | 'connecting' | 'connected' | 'disconnected';
+  playerNames: Record<PlayerID, string>;
+  playerStats: { wins: number; losses: number };
+  isOnline: boolean;
   // Tracks whether each player has placed their initial block in fixed mode
   initialPlaced: Record<PlayerID, boolean>;
 }

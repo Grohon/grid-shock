@@ -34,7 +34,6 @@ export default defineConfig({
         ],
       },
       manifest: {
-
         name: "Grid Shock",
         short_name: "GridShock",
         description: "A tactical chain reaction strategy game.",

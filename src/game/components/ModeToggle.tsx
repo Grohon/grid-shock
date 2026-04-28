@@ -4,8 +4,22 @@ import { Peer } from 'peerjs';
 
 export default function ModeToggle() {
   const initGame = useGameStore(state => state.initGame);
+  const setPlayerName = useGameStore(state => state.setPlayerName);
+  const state = useGameStore(state => state.state);
 
   // Load initial values from localStorage or use defaults
+  const [userName, setUserName] = useState(state.playerNames[state.localPlayerId || 1] || '');
+
+  // Update store name when local state changes
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (userName.trim()) {
+        setPlayerName(userName.trim());
+      }
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [userName, setPlayerName]);
+
   const [mode, setMode] = useState<'classic' | 'fixed'>(() => {
     return (localStorage.getItem('gameMode') as 'classic' | 'fixed') || 'fixed';
   });
@@ -25,6 +39,9 @@ export default function ModeToggle() {
 
   const [view, setView] = useState<'create' | 'join'>('create');
   const [joinId, setJoinId] = useState('');
+  const [isOnline, setIsOnline] = useState(() => {
+    return localStorage.getItem('gameIsOnline') === 'true';
+  });
 
   // Save settings to localStorage when they change
   useEffect(() => {
@@ -33,27 +50,28 @@ export default function ModeToggle() {
     localStorage.setItem('gameCols', cols.toString());
     localStorage.setItem('gameNumPlayers', numPlayers.toString());
     localStorage.setItem('gameVsComputer', vsComputer.toString());
-  }, [mode, rows, cols, numPlayers, vsComputer]);
+    localStorage.setItem('gameIsOnline', isOnline.toString());
+  }, [mode, rows, cols, numPlayers, vsComputer, isOnline]);
 
   const [isChecking, setIsChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleStart = () => {
-    initGame(rows, cols, mode, vsComputer, numPlayers, undefined, 1);
+    initGame(rows, cols, mode, vsComputer, numPlayers, undefined, isOnline ? 1 : undefined, isOnline);
   };
 
   const handleJoin = () => {
     if (joinId.length < 4) return;
-    
+
     setIsChecking(true);
     setError(null);
 
     const tempPeer = new Peer();
     const ROOM_PREFIX = 'GS_ROOM_';
-    
+
     tempPeer.on('open', () => {
       const conn = tempPeer.connect(ROOM_PREFIX + joinId);
-      
+
       const timeout = setTimeout(() => {
         tempPeer.destroy();
         setError('Room not found or host unavailable.');
@@ -83,21 +101,58 @@ export default function ModeToggle() {
 
   return (
     <div className="space-y-6">
-      {/* View Switcher */}
-      <div className="flex bg-material-surfaceVariant/20 p-1 rounded-m3-lg border border-material-outline/10">
+      {/* Profile Section */}
+      <div className="bg-material-surfaceVariant/30 p-4 rounded-m3-xl space-y-3 border border-material-outline/10">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-material-primary uppercase tracking-wider">Your Profile</h3>
+          <div className="flex gap-3 text-[10px] font-black text-material-onSurfaceVariant/60">
+            <span>WINS: <span className="text-green-600">{state.playerStats.wins}</span></span>
+            <span>LOSSES: <span className="text-red-600">{state.playerStats.losses}</span></span>
+          </div>
+        </div>
+        <input
+          type="text"
+          placeholder="Enter your nickname..."
+          value={userName}
+          onChange={(e) => setUserName(e.target.value)}
+          className="w-full bg-white/50 p-3 rounded-m3-lg border border-material-outline/20 focus:border-material-primary focus:ring-1 focus:ring-material-primary outline-none transition-all font-bold text-material-onSurface"
+          maxLength={15}
+        />
+      </div>
+
+      {/* Play Mode Switcher */}
+      <div className="flex bg-material-secondaryContainer/30 p-1 rounded-m3-lg border border-material-outline/10">
         <button
-          onClick={() => setView('create')}
-          className={`flex-1 py-2 text-sm font-bold rounded-m3-md transition-all ${view === 'create' ? 'bg-white text-material-primary shadow-sm' : 'text-material-onSurfaceVariant/70 hover:text-material-onSurface'}`}
+          onClick={() => { setIsOnline(false); setView('create'); }}
+          className={`flex-1 py-2.5 text-sm font-bold rounded-m3-md transition-all flex items-center justify-center gap-2 ${!isOnline ? 'bg-material-primary text-material-onPrimary shadow-m3-1' : 'text-material-onSurfaceVariant/70 hover:text-material-onSurface'}`}
         >
-          New Game
+          <span>📱</span> Pass & Play
         </button>
         <button
-          onClick={() => setView('join')}
-          className={`flex-1 py-2 text-sm font-bold rounded-m3-md transition-all ${view === 'join' ? 'bg-white text-material-primary shadow-sm' : 'text-material-onSurfaceVariant/70 hover:text-material-onSurface'}`}
+          onClick={() => setIsOnline(true)}
+          className={`flex-1 py-2.5 text-sm font-bold rounded-m3-md transition-all flex items-center justify-center gap-2 ${isOnline ? 'bg-material-primary text-material-onPrimary shadow-m3-1' : 'text-material-onSurfaceVariant/70 hover:text-material-onSurface'}`}
         >
-          Join Game
+          <span>🌐</span> Online
         </button>
       </div>
+
+      {/* View Switcher - Only visible when Online */}
+      {isOnline && (
+        <div className="flex bg-material-surfaceVariant/20 p-1 rounded-m3-lg border border-material-outline/10 animate-in fade-in zoom-in duration-300">
+          <button
+            onClick={() => setView('create')}
+            className={`flex-1 py-2 text-sm font-bold rounded-m3-md transition-all ${view === 'create' ? 'bg-white text-material-primary shadow-sm' : 'text-material-onSurfaceVariant/70 hover:text-material-onSurface'}`}
+          >
+            Create Room
+          </button>
+          <button
+            onClick={() => setView('join')}
+            className={`flex-1 py-2 text-sm font-bold rounded-m3-md transition-all ${view === 'join' ? 'bg-white text-material-primary shadow-sm' : 'text-material-onSurfaceVariant/70 hover:text-material-onSurface'}`}
+          >
+            Join Room
+          </button>
+        </div>
+      )}
 
       {view === 'create' ? (
         <div className="space-y-4 animate-in fade-in slide-in-from-left-4 duration-300">
@@ -106,14 +161,26 @@ export default function ModeToggle() {
               <label className="text-sm font-medium text-material-onSurfaceVariant ml-1">
                 Game Mode
               </label>
-              <select
-                className="m3-select w-full"
-                value={mode}
-                onChange={e => setMode(e.target.value as 'classic' | 'fixed')}
-              >
-                <option value="classic">Classic (Dynamic Threshold)</option>
-                <option value="fixed">Fixed (Threshold: 4)</option>
-              </select>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { value: 'fixed',   label: 'Fixed',   desc: 'Threshold of 4' },
+                  { value: 'classic', label: 'Classic', desc: 'Dynamic threshold' },
+                ] as const).map(({ value, label, desc }) => (
+                  <button
+                    key={value}
+                    onClick={() => setMode(value)}
+                    className={`flex flex-col items-center py-2.5 px-3 rounded-m3-md font-bold transition-all border text-sm
+                      ${mode === value
+                        ? 'bg-material-primary text-material-onPrimary border-material-primary shadow-m3-1'
+                        : 'bg-material-surfaceVariant/30 text-material-onSurfaceVariant border-material-outline/10 hover:bg-material-surfaceVariant'}`}
+                  >
+                    {label}
+                    <span className={`text-[10px] font-normal mt-0.5 ${mode === value ? 'text-material-onPrimary/70' : 'text-material-onSurfaceVariant/60'}`}>
+                      {desc}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="flex flex-col gap-2">
@@ -162,8 +229,8 @@ export default function ModeToggle() {
             )}
 
 
-            <div className="space-y-8 pt-4">
-              <div className="flex flex-col gap-4">
+            <div className="flex gap-4 pt-4 xyz">
+              <div className="flex-1 flex flex-col gap-4">
                 <div className="flex justify-between items-center px-1">
                   <label className="text-sm font-bold text-material-onSurface">
                     Rows
@@ -189,7 +256,7 @@ export default function ModeToggle() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-4">
+              <div className="flex-1 flex flex-col gap-4">
                 <div className="flex justify-between items-center px-1">
                   <label className="text-sm font-bold text-material-onSurface">
                     Columns

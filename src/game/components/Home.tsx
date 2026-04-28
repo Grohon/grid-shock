@@ -27,7 +27,7 @@ export default function Home() {
 
       <main className="w-full max-w-md px-4 sm:px-0">
         <div className="m3-card shadow-m3-3 border border-material-outline/5 bg-white/60 backdrop-blur-xl">
-          <h2 className="text-2xl font-bold mb-8 text-center text-material-onSurface">
+          <h2 className="text-2xl font-bold mb-2 text-center text-material-onSurface">
             New Game
           </h2>
           <ModeToggle />
