@@ -16,7 +16,7 @@ function createBoard(rows: number, cols: number): Board {
   return board;
 }
 
-import { Peer, DataConnection } from 'peerjs';
+import { Peer } from 'peerjs';
 
 interface GameStore {
   state: GameState;
@@ -48,29 +48,35 @@ const cleanupNetworking = () => {
 /** Shared message handler */
 const handlePeerData = (data: any) => {
   const store = useGameStore.getState();
-  const { type, x, y, player, state: remoteState } = data;
+  const { type, x, y, player, state: remoteState, name: remoteName } = data;
 
   if (type === 'MOVE' && player === store.state.currentPlayer) {
     store.attemptMove(x, y, true);
-  } 
+  }
   else if (type === 'RESET') {
-    // Force a local reset without broadcasting back
     store.resetGame(true);
   }
   else if (type === 'NAME_UPDATE') {
     useGameStore.setState(s => {
-      const newNames = { ...s.state.playerNames, [player]: data.name };
+      const newNames = { ...s.state.playerNames, [player]: remoteName };
       localStorage.setItem('gs_playerNames', JSON.stringify(newNames));
       return { state: { ...s.state, playerNames: newNames } };
     });
   }
   else if (type === 'SYNC_REQUEST') {
-    // If we are host, broadcast our state to the new connection
+    // Host: update joiner's name immediately, then send state back
+    if (remoteName && player) {
+      useGameStore.setState(s => {
+        const newNames = { ...s.state.playerNames, [player]: remoteName };
+        localStorage.setItem('gs_playerNames', JSON.stringify(newNames));
+        return { state: { ...s.state, playerNames: newNames } };
+      });
+    }
     broadcastToPeers({
       type: 'SYNC_RESPONSE',
-      state: store.state
+      state: useGameStore.getState().state
     });
-  } 
+  }
   else if (type === 'SYNC_RESPONSE' && remoteState) {
     const localId = store.state.localPlayerId;
     const localNames = JSON.parse(localStorage.getItem('gs_playerNames') || '{"1":"Player 1","2":"Player 2","3":"Player 3","4":"Player 4"}');
@@ -88,11 +94,20 @@ const handlePeerData = (data: any) => {
         playerNames: mergedNames
       }
     });
-    // Broadcast joiner's name to host
-    if (localId && localId !== 1) {
+    // Backup: broadcast joiner's name to host (in case SYNC_REQUEST name didn't arrive)
+    if (localId && localId !== 1 && localName) {
       broadcastToPeers({ type: 'NAME_UPDATE', name: localName, player: localId });
     }
   }
+};
+
+// ICE servers for cross-network NAT traversal
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+  ],
 };
 
 /** Broadcast to all connected peers */
@@ -132,7 +147,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     const board = createBoard(r, c);
     // Generate a random 6-character room ID if not provided
-    const id = gameId || Math.random().toString(36).substring(2, 8).toUpperCase();
+    const id = gameId || String(Math.floor(Math.random() * 900000) + 100000);
 
     // For online, host always starts first; otherwise randomize
     const startPlayer = isOnline ? 1 as PlayerID : (Math.floor(Math.random() * numPlayers) + 1) as PlayerID;
@@ -175,7 +190,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (localPlayerId === 1) {
         // HOST: Setup peer server with prefixed ID
         useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'connecting' } }));
-        peerInstance = new Peer(ROOM_PREFIX + id);
+        peerInstance = new Peer(ROOM_PREFIX + id, { config: ICE_SERVERS });
         
         peerInstance.on('open', () => {
           useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'waiting' } }));
@@ -201,20 +216,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
       } else if (gameId && localPlayerId) {
         // JOINER: Connect to host
         useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'connecting' } }));
-        peerInstance = new Peer(); 
+        peerInstance = new Peer({ config: ICE_SERVERS });
         peerInstance.on('open', () => {
           const conn = peerInstance!.connect(ROOM_PREFIX + gameId);
           activeConnections.push(conn);
           conn.on('open', () => {
             useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'connected' } }));
-            conn.on('data', handlePeerData);
-            conn.send({ type: 'SYNC_REQUEST' });
+          conn.on('data', handlePeerData);
+            // Send sync request with joiner's name
+            conn.send({ type: 'SYNC_REQUEST', name: localName, player: localPlayerId });
           });
           conn.on('close', () => {
             activeConnections = activeConnections.filter(c => c !== conn);
-            useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'disconnected' } }));
-          });
-          conn.on('error', () => {
             useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'disconnected' } }));
           });
         });

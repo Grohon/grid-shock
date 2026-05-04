@@ -2,6 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useGameStore, ROOM_PREFIX } from '../store';
 import { Peer } from 'peerjs';
 
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+  ],
+};
+
 export default function ModeToggle() {
   const initGame = useGameStore(state => state.initGame);
   const gameState = useGameStore(state => state.state);
@@ -67,7 +75,7 @@ export default function ModeToggle() {
     setIsChecking(true);
     setError(null);
 
-    const tempPeer = new Peer();
+    const tempPeer = new Peer({ config: ICE_SERVERS });
 
     tempPeer.on('open', () => {
       const conn = tempPeer.connect(ROOM_PREFIX + joinId);
@@ -340,10 +348,10 @@ export default function ModeToggle() {
             </label>
             <input
               type="text"
-              placeholder="ENTER 6-CHAR CODE"
+              placeholder="ENTER 6-DIGIT CODE"
               maxLength={6}
               value={joinId}
-              onChange={e => setJoinId(e.target.value.toUpperCase())}
+              onChange={e => setJoinId(e.target.value.replace(/[^0-9]/g, ''))}
               className="w-full bg-material-surfaceVariant/30 border-2 border-material-primary/20 rounded-m3-lg px-6 py-4 text-center text-2xl font-black tracking-widest text-material-primary placeholder:text-material-outline/30 focus:border-material-primary focus:outline-none transition-all uppercase"
             />
             <p className="text-xs text-center text-material-onSurfaceVariant px-4">
