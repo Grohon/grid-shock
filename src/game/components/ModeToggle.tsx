@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useGameStore } from '../store';
+import { useGameStore, ROOM_PREFIX } from '../store';
 import { Peer } from 'peerjs';
 
 export default function ModeToggle() {
@@ -67,7 +67,6 @@ export default function ModeToggle() {
     setError(null);
 
     const tempPeer = new Peer();
-    const ROOM_PREFIX = 'GS_ROOM_';
 
     tempPeer.on('open', () => {
       const conn = tempPeer.connect(ROOM_PREFIX + joinId);
@@ -81,7 +80,7 @@ export default function ModeToggle() {
       conn.on('open', () => {
         clearTimeout(timeout);
         tempPeer.destroy();
-        initGame(rows, cols, mode, false, numPlayers, joinId, 2);
+        initGame(rows, cols, mode, false, numPlayers, joinId, 2, true);
         setIsChecking(false);
       });
 

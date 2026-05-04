@@ -38,7 +38,7 @@ export default function Play() {
             onClick={handleCopy}
             className="flex items-center gap-2 bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-material-outline/10 shadow-m3-1 transition-all active:scale-90 group"
           >
-            <div className={`w-1.5 h-1.5 rounded-full ${state.connectionStatus === 'connected' ? 'bg-green-500 animate-pulse' : 'bg-amber-500'}`} />
+            <div className={`w-1.5 h-1.5 rounded-full ${state.connectionStatus === 'connected' ? 'bg-green-500 animate-pulse' : state.connectionStatus === 'waiting' ? 'bg-amber-500 animate-pulse' : state.connectionStatus === 'disconnected' ? 'bg-red-500' : 'bg-gray-400'}`} />
             <span className="text-[11px] font-black text-material-primary tracking-tight">
               {copied ? 'COPIED!' : 'ROOM: ' + state.gameId}
             </span>

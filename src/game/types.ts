@@ -23,7 +23,7 @@ export interface GameState {
   numPlayers: number;
   gameId?: string;
   localPlayerId?: PlayerID;
-  connectionStatus?: 'offline' | 'connecting' | 'connected' | 'disconnected';
+  connectionStatus?: 'offline' | 'connecting' | 'waiting' | 'connected' | 'disconnected';
   playerNames: Record<PlayerID, string>;
   playerStats: { wins: number; losses: number };
   isOnline: boolean;

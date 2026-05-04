@@ -29,16 +29,18 @@ interface GameStore {
 }
 
 // Networking state (managed outside Zustand to avoid serialization issues)
-const ROOM_PREFIX = 'GS_ROOM_';
+export const ROOM_PREFIX = 'GS_ROOM_';
 let peerInstance: Peer | null = null;
 let activeConnections: DataConnection[] = [];
 
 /** Helper to clean up existing connections */
 const cleanupNetworking = () => {
-  activeConnections.forEach(conn => conn.close());
+  activeConnections.forEach(conn => {
+    try { conn.close(); } catch {}
+  });
   activeConnections = [];
   if (peerInstance) {
-    peerInstance.destroy();
+    try { peerInstance.destroy(); } catch {}
     peerInstance = null;
   }
 };
@@ -154,14 +156,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
         peerInstance = new Peer(ROOM_PREFIX + id);
         
         peerInstance.on('open', () => {
-          useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'connected' } }));
+          useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'waiting' } }));
         });
 
         peerInstance.on('connection', (conn) => {
           activeConnections.push(conn);
+          conn.on('open', () => {
+            useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'connected' } }));
+          });
           conn.on('data', handlePeerData);
           conn.on('close', () => {
             activeConnections = activeConnections.filter(c => c !== conn);
+            if (activeConnections.length === 0) {
+              useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'waiting' } }));
+            }
           });
         });
 
