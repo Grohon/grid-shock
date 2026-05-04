@@ -73,11 +73,17 @@ const handlePeerData = (data: any) => {
     });
   } 
   else if (type === 'SYNC_RESPONSE' && remoteState) {
+    const localId = store.state.localPlayerId;
+    const localName = store.state.playerNames[localId as PlayerID];
     useGameStore.setState({
       state: {
         ...remoteState,
-        localPlayerId: store.state.localPlayerId,
-        gameId: store.state.gameId // Keep our 6-char ID
+        localPlayerId: localId,
+        gameId: store.state.gameId,
+        playerNames: {
+          ...remoteState.playerNames,
+          [localId as PlayerID]: localName || remoteState.playerNames[localId as PlayerID]
+        }
       }
     });
   }
@@ -141,7 +147,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       vsComputer: vsComputer && numPlayers === 2,
       computerPlayer: (vsComputer && numPlayers === 2) ? 2 : undefined,
       initialPlaced: { 1: false, 2: false, 3: false, 4: false },
-      playerNames: { 1: 'Player 1', 2: 'Player 2', 3: 'Player 3', 4: 'Player 4', [localPlayerId || 1]: localName },
+      playerNames: { ...(get().state.playerNames || { 1: 'Player 1', 2: 'Player 2', 3: 'Player 3', 4: 'Player 4' }), [localPlayerId || 1]: localName },
       playerStats: storedStats,
       isOnline,
     };
@@ -313,7 +319,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   resetGame: (isRemote = false) => {
-    const { rows, cols, mode, vsComputer, numPlayers, gameId, localPlayerId } = get().state;
+    const { rows, cols, mode, vsComputer, numPlayers, gameId, localPlayerId, playerNames, playerStats } = get().state;
     const board = createBoard(rows, cols);
     const startPlayer = (Math.floor(Math.random() * numPlayers) + 1) as PlayerID;
 
@@ -332,6 +338,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       vsComputer: vsComputer && numPlayers === 2,
       computerPlayer: (vsComputer && numPlayers === 2) ? 2 : undefined,
       initialPlaced: { 1: false, 2: false, 3: false, 4: false },
+      playerNames,
+      playerStats,
     };
 
     set({ isAnimating: false, state: newState });
@@ -354,6 +362,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   // Clear all state to go back to setup screen
   clearGame: () => {
+    const { playerNames, playerStats } = get().state;
     set({
       state: {
         board: [],
@@ -365,8 +374,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         gameOver: false,
         winner: undefined,
         initialPlaced: { 1: false, 2: false, 3: false, 4: false },
-        playerNames: { 1: 'Player 1', 2: 'Player 2', 3: 'Player 3', 4: 'Player 4' },
-        playerStats: JSON.parse(localStorage.getItem('gs_stats') || '{"wins":0, "losses":0}'),
+        playerNames,
+        playerStats,
       },
     });
   },
