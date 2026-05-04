@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- pop animation trigger */
 import React from 'react';
 import { Cell as CellType, PlayerID } from '../types';
 

@@ -20,16 +20,19 @@ export default function Board() {
       <div className="flex flex-col gap-1 sm:gap-1.5">
         {board.map((row, i) => (
           <div key={i} className="flex gap-1 sm:gap-1.5 w-full">
-            {row.map((cell, j) => (
-              <div key={j} className="flex-1 min-w-0">
-                <Cell
-                  x={i}
-                  y={j}
-                  cell={cell}
-                  onClick={handleClick}
-                />
-              </div>
-            ))}
+            {row.map((cell, j) => {
+              const isLastMove = state.lastMove?.x === i && state.lastMove?.y === j;
+              return (
+                <div key={j} className={`flex-1 min-w-0 ${isLastMove ? 'outline-2 outline-offset-1 outline-material-primary rounded-m3-xs sm:rounded-m3-sm' : ''}`}>
+                  <Cell
+                    x={i}
+                    y={j}
+                    cell={cell}
+                    onClick={handleClick}
+                  />
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>

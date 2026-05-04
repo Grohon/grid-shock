@@ -1,4 +1,5 @@
 .aider*
+.agents/
 node_modules/
 *.log
 dist/

@@ -72,10 +72,10 @@ export default function Play() {
           {/* Desktop Actions */}
           <div className="hidden sm:flex gap-2">
             {gameOver && (
-              <button
-                onClick={resetGame}
-                className="bg-material-primary text-material-onPrimary px-4 py-1.5 rounded-m3-lg text-sm font-bold shadow-m3-1 hover:shadow-m3-2 transition-all active:scale-95"
-              >
+            <button
+              onClick={() => resetGame()}
+              className="bg-material-primary text-material-onPrimary px-4 py-1.5 rounded-m3-lg text-sm font-bold shadow-m3-1 hover:shadow-m3-2 transition-all active:scale-95"
+            >
                 Again
               </button>
             )}

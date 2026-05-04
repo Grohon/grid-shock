@@ -4,21 +4,21 @@ import { Peer } from 'peerjs';
 
 export default function ModeToggle() {
   const initGame = useGameStore(state => state.initGame);
-  const setPlayerName = useGameStore(state => state.setPlayerName);
-  const state = useGameStore(state => state.state);
+  const gameState = useGameStore(state => state.state);
 
-  // Load initial values from localStorage or use defaults
-  const [userName, setUserName] = useState(state.playerNames[state.localPlayerId || 1] || '');
+  // Load all player names from localStorage
+  const [playerNames, setPlayerNames] = useState<Record<number, string>>(() => {
+    const raw = JSON.parse(localStorage.getItem('gs_playerNames') || '{"1":"Player 1","2":"Player 2","3":"Player 3","4":"Player 4"}');
+    return { 1: raw['1'], 2: raw['2'], 3: raw['3'], 4: raw['4'] };
+  });
 
-  // Update store name when local state changes
+  // Sync names to localStorage and store on change
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (userName.trim()) {
-        setPlayerName(userName.trim());
-      }
-    }, 500);
-    return () => clearTimeout(timeout);
-  }, [userName, setPlayerName]);
+    localStorage.setItem('gs_playerNames', JSON.stringify(playerNames));
+    useGameStore.setState(s => ({
+      state: { ...s.state, playerNames: { ...s.state.playerNames, ...playerNames } }
+    }));
+  }, [playerNames]);
 
   const [mode, setMode] = useState<'classic' | 'fixed'>(() => {
     return (localStorage.getItem('gameMode') as 'classic' | 'fixed') || 'fixed';
@@ -39,9 +39,7 @@ export default function ModeToggle() {
 
   const [view, setView] = useState<'create' | 'join'>('create');
   const [joinId, setJoinId] = useState('');
-  const [isOnline, setIsOnline] = useState(() => {
-    return localStorage.getItem('gameIsOnline') === 'true';
-  });
+  const [isOnline, setIsOnline] = useState(false);
 
   // Save settings to localStorage when they change
   useEffect(() => {
@@ -57,12 +55,15 @@ export default function ModeToggle() {
   const [error, setError] = useState<string | null>(null);
 
   const handleStart = () => {
-    initGame(rows, cols, mode, vsComputer, numPlayers, undefined, isOnline ? 1 : undefined, isOnline);
+    localStorage.setItem('gs_playerNames', JSON.stringify(playerNames));
+    const effectiveVsComputer = numPlayers === 2 && !isOnline && vsComputer;
+    initGame(rows, cols, mode, effectiveVsComputer, numPlayers, undefined, isOnline ? 1 : undefined, isOnline);
   };
 
   const handleJoin = () => {
     if (joinId.length < 4) return;
 
+    localStorage.setItem('gs_playerNames', JSON.stringify(playerNames));
     setIsChecking(true);
     setError(null);
 
@@ -105,15 +106,15 @@ export default function ModeToggle() {
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-material-primary uppercase tracking-wider">Your Profile</h3>
           <div className="flex gap-3 text-[10px] font-black text-material-onSurfaceVariant/60">
-            <span>WINS: <span className="text-green-600">{state.playerStats.wins}</span></span>
-            <span>LOSSES: <span className="text-red-600">{state.playerStats.losses}</span></span>
+            <span>WINS: <span className="text-green-600">{gameState.playerStats.wins}</span></span>
+            <span>LOSSES: <span className="text-red-600">{gameState.playerStats.losses}</span></span>
           </div>
         </div>
         <input
           type="text"
-          placeholder="Enter your nickname..."
-          value={userName}
-          onChange={(e) => setUserName(e.target.value)}
+          placeholder="Player 1 name..."
+          value={playerNames[1]}
+          onChange={(e) => setPlayerNames(prev => ({ ...prev, [1]: e.target.value }))}
           className="w-full bg-white/50 p-3 rounded-m3-lg border border-material-outline/20 focus:border-material-primary focus:ring-1 focus:ring-material-primary outline-none transition-all font-bold text-material-onSurface"
           maxLength={15}
         />
@@ -204,26 +205,67 @@ export default function ModeToggle() {
               </div>
             </div>
 
-            {numPlayers === 2 && (
-              <div className="flex items-center justify-between p-3 rounded-m3-md bg-material-surfaceVariant/20 border border-material-outline/10 animate-in fade-in slide-in-from-top-1">
-                <div className="flex flex-col">
-                  <span className="font-medium text-material-onSurface">Vs Computer</span>
-                  <span className="text-xs text-material-onSurfaceVariant">Play against an AI opponent</span>
-                </div>
-                <button
-                  onClick={() => setVsComputer(!vsComputer)}
-                  className={`
-                    relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none
-                    ${vsComputer ? 'bg-material-primary' : 'bg-material-outline/30'}
-                  `}
-                >
-                  <div
+            {!isOnline && numPlayers === 2 && (
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-material-onSurfaceVariant ml-1">
+                  Game Type
+                </label>
+                <div className="flex items-center justify-between p-3 rounded-m3-md bg-material-surfaceVariant/20 border border-material-outline/10">
+                  <div className="flex flex-col">
+                    <span className="font-medium text-material-onSurface">Vs Computer</span>
+                    <span className="text-xs text-material-onSurfaceVariant">Play against an AI opponent</span>
+                  </div>
+                  <button
+                    onClick={() => setVsComputer(!vsComputer)}
                     className={`
-                      absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform duration-300 shadow-sm
-                      ${vsComputer ? 'translate-x-6' : 'translate-x-0'}
+                      relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none
+                      ${vsComputer ? 'bg-material-primary' : 'bg-material-outline/30'}
                     `}
-                  />
-                </button>
+                  >
+                    <div
+                      className={`
+                        absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform duration-300 shadow-sm
+                        ${vsComputer ? 'translate-x-6' : 'translate-x-0'}
+                      `}
+                    />
+                  </button>
+                </div>
+                {!vsComputer && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-material-onSurfaceVariant/60 w-10 shrink-0">P2</span>
+                    <input
+                      type="text"
+                      placeholder="Player 2 name..."
+                      value={playerNames[2]}
+                      onChange={(e) => setPlayerNames(prev => ({ ...prev, [2]: e.target.value }))}
+                      className="flex-1 bg-white/50 p-3 rounded-m3-lg border border-material-outline/20 focus:border-material-primary focus:ring-1 focus:ring-material-primary outline-none transition-all font-medium text-material-onSurface"
+                      maxLength={15}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!isOnline && numPlayers > 2 && (
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-material-onSurfaceVariant ml-1">
+                  Opponent Names
+                </label>
+                <div className="space-y-2">
+                  {Array.from({ length: numPlayers - 1 }, (_, i) => i + 2).map(playerId => (
+                    <div key={playerId} className="flex items-center gap-3">
+                      <span className="text-xs font-bold text-material-onSurfaceVariant/60 w-10 shrink-0">P{playerId}</span>
+                      <input
+                        type="text"
+                        placeholder={`Player ${playerId} name...`}
+                        value={playerNames[playerId]}
+                        onChange={(e) => setPlayerNames(prev => ({ ...prev, [playerId]: e.target.value }))}
+                        className="flex-1 bg-white/50 p-3 rounded-m3-lg border border-material-outline/20 focus:border-material-primary focus:ring-1 focus:ring-material-primary outline-none transition-all font-medium text-material-onSurface"
+                        maxLength={15}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

@@ -27,7 +27,7 @@ export interface GameState {
   playerNames: Record<PlayerID, string>;
   playerStats: { wins: number; losses: number };
   isOnline: boolean;
-  // Tracks whether each player has placed their initial block in fixed mode
   initialPlaced: Record<PlayerID, boolean>;
+  lastMove?: { x: number; y: number };
 }
 

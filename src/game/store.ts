@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 import { GameState, PlayerID, Cell, Board } from './types';
-import { makeMove, getThreshold, isValidMove, getExplosionSteps, checkWin, getComputerMove } from './engine';
+import { getExplosionSteps, checkWin, getComputerMove, isValidMove } from './engine';
 
 /** Helper to create an empty board */
 function createBoard(rows: number, cols: number): Board {
@@ -21,11 +21,11 @@ import { Peer, DataConnection } from 'peerjs';
 interface GameStore {
   state: GameState;
   isAnimating: boolean;
-  initGame: (rows: number, cols: number, mode: 'classic' | 'fixed', vsComputer: boolean, numPlayers: number, gameId?: string, localPlayerId?: PlayerID) => void;
+  initGame: (rows: number, cols: number, mode: 'classic' | 'fixed', vsComputer: boolean, numPlayers: number, gameId?: string, localPlayerId?: PlayerID, isOnline?: boolean) => void;
   attemptMove: (x: number, y: number, isRemote?: boolean) => Promise<void>;
   resetGame: (isRemote?: boolean) => void;
   clearGame: () => void;
-  setPlayerName: (name: string) => void;
+  setPlayerName: (playerId: PlayerID, name: string) => void;
 }
 
 // Networking state (managed outside Zustand to avoid serialization issues)
@@ -58,12 +58,11 @@ const handlePeerData = (data: any) => {
     store.resetGame(true);
   }
   else if (type === 'NAME_UPDATE') {
-    useGameStore.setState(s => ({
-      state: {
-        ...s.state,
-        playerNames: { ...s.state.playerNames, [player]: data.name }
-      }
-    }));
+    useGameStore.setState(s => {
+      const newNames = { ...s.state.playerNames, [player]: data.name };
+      localStorage.setItem('gs_playerNames', JSON.stringify(newNames));
+      return { state: { ...s.state, playerNames: newNames } };
+    });
   }
   else if (type === 'SYNC_REQUEST') {
     // If we are host, broadcast our state to the new connection
@@ -74,18 +73,25 @@ const handlePeerData = (data: any) => {
   } 
   else if (type === 'SYNC_RESPONSE' && remoteState) {
     const localId = store.state.localPlayerId;
-    const localName = store.state.playerNames[localId as PlayerID];
+    const localNames = JSON.parse(localStorage.getItem('gs_playerNames') || '{"1":"Player 1","2":"Player 2","3":"Player 3","4":"Player 4"}');
+    const localName = localNames[localId as PlayerID];
+    const mergedNames = {
+      ...remoteState.playerNames,
+      [localId as PlayerID]: localName || remoteState.playerNames[localId as PlayerID]
+    };
+    localStorage.setItem('gs_playerNames', JSON.stringify(mergedNames));
     useGameStore.setState({
       state: {
         ...remoteState,
         localPlayerId: localId,
         gameId: store.state.gameId,
-        playerNames: {
-          ...remoteState.playerNames,
-          [localId as PlayerID]: localName || remoteState.playerNames[localId as PlayerID]
-        }
+        playerNames: mergedNames
       }
     });
+    // Broadcast joiner's name to host
+    if (localId && localId !== 1) {
+      broadcastToPeers({ type: 'NAME_UPDATE', name: localName, player: localId });
+    }
   }
 };
 
@@ -108,10 +114,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     numPlayers: 2,
     gameOver: false,
     winner: undefined,
+    vsComputer: false,
     initialPlaced: { 1: false, 2: false, 3: false, 4: false },
-    playerNames: { 1: 'Player 1', 2: 'Player 2', 3: 'Player 3', 4: 'Player 4' },
+    playerNames: JSON.parse(localStorage.getItem('gs_playerNames') || '{"1":"Player 1","2":"Player 2","3":"Player 3","4":"Player 4"}'),
     playerStats: JSON.parse(localStorage.getItem('gs_stats') || '{"wins":0, "losses":0}'),
     isOnline: false,
+    lastMove: undefined,
   },
   isAnimating: false,
   initGame: (rows, cols, mode, vsComputer, numPlayers = 2, gameId?: string, localPlayerId?: PlayerID, isOnline = false) => {
@@ -126,12 +134,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Generate a random 6-character room ID if not provided
     const id = gameId || Math.random().toString(36).substring(2, 8).toUpperCase();
 
-    // Randomize starting player (1 to numPlayers)
-    const startPlayer = (Math.floor(Math.random() * numPlayers) + 1) as PlayerID;
+    // For online, host always starts first; otherwise randomize
+    const startPlayer = isOnline ? 1 as PlayerID : (Math.floor(Math.random() * numPlayers) + 1) as PlayerID;
 
-    // Load local stats and name
+    // Load local stats and names
     const storedStats = JSON.parse(localStorage.getItem('gs_stats') || '{"wins":0, "losses":0}');
-    const localName = localStorage.getItem('gs_name') || `Player ${localPlayerId || 1}`;
+    const storedNames = JSON.parse(localStorage.getItem('gs_playerNames') || '{"1":"Player 1","2":"Player 2","3":"Player 3","4":"Player 4"}');
+    const localId = localPlayerId || 1;
+    const localName = storedNames[localId as PlayerID] || `Player ${localId}`;
+
+    // Online: only keep local name for Player 1, others get defaults until synced
+    const playerNames = isOnline
+      ? { 1: localName, 2: 'Player 2', 3: 'Player 3', 4: 'Player 4' }
+      : { ...(get().state.playerNames || storedNames), ...storedNames, [localId]: localName };
 
     const newState: GameState = {
       board,
@@ -147,9 +162,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       vsComputer: vsComputer && numPlayers === 2,
       computerPlayer: (vsComputer && numPlayers === 2) ? 2 : undefined,
       initialPlaced: { 1: false, 2: false, 3: false, 4: false },
-      playerNames: { ...(get().state.playerNames || { 1: 'Player 1', 2: 'Player 2', 3: 'Player 3', 4: 'Player 4' }), [localPlayerId || 1]: localName },
+      playerNames,
       playerStats: storedStats,
       isOnline,
+      lastMove: undefined,
     };
 
     set({ isAnimating: false, state: newState });
@@ -236,7 +252,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ isAnimating: true });
 
     // 1. Initial placement
-    const placedState = { ...state, board: state.board.map(row => row.map(c => ({ ...c }))) };
+    const placedState = { ...state, board: state.board.map(row => row.map(c => ({ ...c }))), lastMove: { x, y } };
     const targetCell = placedState.board[x][y];
     targetCell.count += 1;
     targetCell.owner = placedState.currentPlayer;
@@ -340,6 +356,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       initialPlaced: { 1: false, 2: false, 3: false, 4: false },
       playerNames,
       playerStats,
+      lastMove: undefined,
     };
 
     set({ isAnimating: false, state: newState });
@@ -362,7 +379,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   // Clear all state to go back to setup screen
   clearGame: () => {
-    const { playerNames, playerStats } = get().state;
+    const storedNames = JSON.parse(localStorage.getItem('gs_playerNames') || '{"1":"Player 1","2":"Player 2","3":"Player 3","4":"Player 4"}');
     set({
       state: {
         board: [],
@@ -373,22 +390,24 @@ export const useGameStore = create<GameStore>((set, get) => ({
         numPlayers: 2,
         gameOver: false,
         winner: undefined,
+        vsComputer: false,
         initialPlaced: { 1: false, 2: false, 3: false, 4: false },
-        playerNames,
-        playerStats,
+        playerNames: storedNames,
+        playerStats: JSON.parse(localStorage.getItem('gs_stats') || '{"wins":0, "losses":0}'),
+        isOnline: false,
+        lastMove: undefined,
       },
     });
   },
 
-  setPlayerName: (name: string) => {
+  setPlayerName: (playerId: PlayerID, name: string) => {
     const { state } = get();
-    const localId = state.localPlayerId || 1;
-    localStorage.setItem('gs_name', name);
-    const newNames = { ...state.playerNames, [localId]: name };
+    const newNames = { ...state.playerNames, [playerId]: name };
+    localStorage.setItem('gs_playerNames', JSON.stringify(newNames));
     set({ state: { ...state, playerNames: newNames } });
     
     // Sync with others
-    broadcastToPeers({ type: 'NAME_UPDATE', name, player: localId });
+    broadcastToPeers({ type: 'NAME_UPDATE', name, player: playerId });
   },
 
   // Update mode without resetting the board (used for settings mid‑game)
