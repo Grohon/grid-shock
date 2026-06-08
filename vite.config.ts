@@ -2,6 +2,8 @@ import { defineConfig, type ViteDevServer } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { WebSocketServer } from "ws";
+import { register, unregister, broadcastAll, getConnectedPlayerIds } from "./api/ws-rooms.js";
 
 /** Vite plugin that serves api/ routes during dev (no separate server needed) */
 function apiRoutesPlugin() {
@@ -45,6 +47,27 @@ function apiRoutesPlugin() {
   return {
     name: 'api-routes',
     configureServer(server: ViteDevServer) {
+      // WebSocket server for real-time game state
+      const wss = new WebSocketServer({ noServer: true });
+      const ROOM_PATH_RE = /^\/ws\?gameId=([a-z]+-[a-z]+-\d{2})&playerId=(\d+)$/;
+
+      server.httpServer?.on('upgrade', (req, socket, head) => {
+        const url = req.url || '';
+        const match = url.match(ROOM_PATH_RE);
+        if (!match) { socket.destroy(); return; }
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          const gameId = match[1];
+          const playerId = Number(match[2]);
+          register(gameId, playerId, ws);
+          ws.on('close', () => {
+            unregister(gameId, playerId);
+            if (getConnectedPlayerIds(gameId).length > 0) {
+              broadcastAll(gameId, { type: 'abandon' });
+            }
+          });
+        });
+      });
+
       // SPA fallback for room links in dev
       server.middlewares.use((req, _res, next) => {
         const url = req.url || '/';

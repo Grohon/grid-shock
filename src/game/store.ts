@@ -17,109 +17,116 @@ interface GameStore {
   setMode: (mode: 'classic' | 'fixed') => void;
 }
 
-let pollTimer: ReturnType<typeof setInterval> | null = null;
+let wsRef: WebSocket | null = null;
+let prevMoveKey = '';
 
-const stopPolling = () => {
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
+function getWsUrl(gameId: string, playerId: PlayerID): string {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${location.host}/ws?gameId=${gameId}&playerId=${playerId}`;
+}
+
+function disconnectWebSocket() {
+  if (wsRef) {
+    wsRef.onclose = null;
+    wsRef.onmessage = null;
+    wsRef.close();
+    wsRef = null;
   }
-};
+}
 
-const startPolling = (gameId: string, localPlayerId: PlayerID) => {
-  stopPolling();
-  let prevMoveKey = '';
-  pollTimer = setInterval(async () => {
-    const store = useGameStore.getState();
-    if (!store.state.isOnline) {
-      stopPolling();
-      return;
-    }
+function connectWebSocket(gameId: string, localPlayerId: PlayerID) {
+  disconnectWebSocket();
+  prevMoveKey = '';
+
+  const ws = new WebSocket(getWsUrl(gameId, localPlayerId));
+  wsRef = ws;
+
+  ws.onmessage = (event) => {
     try {
-      const res = await fetch(`${API_BASE}/game/state?id=${gameId}&playerId=${localPlayerId}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      const serverState = data.state as GameState;
+      const msg = JSON.parse(event.data);
+      const store = useGameStore.getState();
+
+      if (msg.type === 'abandon') {
+        useGameStore.setState({
+          state: { ...store.state, abandoned: true, gameOver: true }
+        });
+        return;
+      }
+
+      if (msg.type !== 'state' || !msg.state) return;
+
+      const serverState = msg.state as GameState;
       const localState = store.state;
       const moveKey = serverState.lastMove ? `${serverState.lastMove.x},${serverState.lastMove.y}` : '';
-
-      const serverReset = !serverState.lastMove && localState.lastMove;
-      const gameOverChanged = localState.gameOver !== serverState.gameOver;
-      const abandonedChanged = serverState.abandoned && !localState.abandoned;
-
       const isNewMove = moveKey && moveKey !== prevMoveKey;
 
-      if (isNewMove || serverReset || gameOverChanged || abandonedChanged) {
-        if (isNewMove) {
-          const { x: mx, y: my, player: movingPlayer } = serverState.lastMove!;
+      let animDuration = 0;
+      if (isNewMove) {
+        const { x: mx, y: my, player: movingPlayer } = serverState.lastMove!;
 
-          if (movingPlayer && movingPlayer !== localPlayerId) {
-            const prevBoard = localState.board;
-            const placedBoard = prevBoard.map(row => row.map(c => ({ ...c })));
-            if (placedBoard[mx]?.[my]) {
-              placedBoard[mx][my].count += 1;
-              placedBoard[mx][my].owner = movingPlayer;
-            }
-            const placedState: GameState = {
-              ...localState,
-              board: placedBoard,
-              playerNames: serverState.playerNames,
-              lastMove: { x: mx, y: my },
-              initialPlaced: { ...localState.initialPlaced, [movingPlayer]: true },
-            };
-            const steps = getExplosionSteps(placedState);
-            for (let i = 1; i < steps.length; i++) {
-              await new Promise(r => setTimeout(r, 500));
+        if (movingPlayer && movingPlayer !== localPlayerId) {
+          const prevBoard = localState.board;
+          const placedBoard = prevBoard.map(row => row.map(c => ({ ...c })));
+          if (placedBoard[mx]?.[my]) {
+            placedBoard[mx][my].count += 1;
+            placedBoard[mx][my].owner = movingPlayer;
+          }
+          const placedState: GameState = {
+            ...localState,
+            board: placedBoard,
+            playerNames: serverState.playerNames,
+            lastMove: { x: mx, y: my },
+            initialPlaced: { ...localState.initialPlaced, [movingPlayer]: true },
+          };
+          const steps = getExplosionSteps(placedState);
+          animDuration = steps.length * 500;
+          for (let i = 1; i < steps.length; i++) {
+            setTimeout(() => {
+              const s = useGameStore.getState();
               useGameStore.setState({
-              state: {
-                ...steps[i],
-                localPlayerId,
-                isOnline: true,
-                playerStats: localState.playerStats,
-                playerNames: steps[i].playerNames,
-              }
+                state: {
+                  ...steps[i],
+                  localPlayerId,
+                  isOnline: true,
+                  playerStats: s.state.playerStats,
+                  playerNames: steps[i].playerNames,
+                }
               });
-            }
+            }, i * 500);
           }
         }
+        prevMoveKey = moveKey;
+      } else if (!moveKey && localState.lastMove) {
+        prevMoveKey = '';
+      }
 
-        if (isNewMove) prevMoveKey = moveKey;
-        if (serverReset) prevMoveKey = '';
-
-        // Sync to authoritative server state
+      // Sync to authoritative server state after animation completes
+      const animDelay = animDuration > 0 ? animDuration + 100 : 0;
+      setTimeout(() => {
+        const s = useGameStore.getState();
         useGameStore.setState({
           state: {
             ...serverState,
             localPlayerId,
             isOnline: true,
-            playerStats: store.state.playerStats,
+            playerStats: s.state.playerStats,
             playerNames: serverState.playerNames,
           }
         });
-      } else {
-        // Sync critical game state to prevent turn deadlock (preserve local board during animation)
-        if (localState.currentPlayer !== serverState.currentPlayer ||
-            localState.gameOver !== serverState.gameOver) {
-          useGameStore.setState({
-            state: {
-              ...store.state,
-              currentPlayer: serverState.currentPlayer,
-              gameOver: serverState.gameOver,
-              winner: serverState.winner,
-              abandoned: serverState.abandoned,
-            }
-          });
-        } else if (JSON.stringify(serverState.playerNames) !== JSON.stringify(store.state.playerNames)) {
-          useGameStore.setState({
-            state: { ...store.state, playerNames: serverState.playerNames }
-          });
-        }
-      }
-    } catch {
-      // Silently retry on next poll
+      }, animDelay);
+    } catch {}
+  };
+
+  ws.onclose = () => {
+    wsRef = null;
+    const store = useGameStore.getState();
+    if (store.state.isOnline && !store.state.gameOver) {
+      useGameStore.setState({
+        state: { ...store.state, abandoned: true, gameOver: true }
+      });
     }
-  }, 1000);
-};
+  };
+}
 
 export const useGameStore = create<GameStore>((set, get) => ({
   state: {
@@ -141,7 +148,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   isAnimating: false,
 
   initGame: (rows, cols, mode, vsComputer, numPlayers = 2, gameId?: string, localPlayerId?: PlayerID, isOnline = false, serverState?: GameState) => {
-    stopPolling();
+    disconnectWebSocket();
     const storedStats = JSON.parse(localStorage.getItem('gs_stats') || '{"wins":0, "losses":0}');
     const storedNames = JSON.parse(localStorage.getItem('gs_playerNames') || '{"1":"Player 1","2":"Player 2","3":"Player 3","4":"Player 4"}');
 
@@ -155,7 +162,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         isOnline: true,
       };
       set({ isAnimating: false, state: newState });
-      startPolling(gameId || serverState.gameId || '', localId);
+      connectWebSocket(gameId || serverState.gameId || '', localId);
       sessionStorage.setItem('gs_session', JSON.stringify({
         gameId: gameId || serverState.gameId,
         playerId: localId,
@@ -198,7 +205,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ isAnimating: false, state: newState });
 
     if (isOnline) {
-      startPolling(gameId || '', localId as PlayerID);
+      connectWebSocket(gameId || '', localId as PlayerID);
       sessionStorage.setItem('gs_session', JSON.stringify({
         gameId,
         playerId: localId as PlayerID,
@@ -260,7 +267,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!afterWin) return;
 
     if (afterWin.gameOver) {
-      const stats = { ...finalState!.playerStats };
+      const stats = { ...afterWin.playerStats };
       if (afterWin.winner === finalState!.localPlayerId || (finalState!.vsComputer && afterWin.winner === 1)) {
         stats.wins += 1;
       } else if (finalState!.localPlayerId || finalState!.vsComputer) {
@@ -292,7 +299,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     set({ state: afterWin });
 
-    // Submit online move to server for persistence & sync
+    // Submit online move to server for persistence (server broadcasts via WS)
     if (isOnlineLocal) {
       try {
         await fetch(`${API_BASE}/game/move`, {
@@ -300,9 +307,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ gameId: state.gameId, playerId: state.localPlayerId, x, y }),
         });
-      } catch {
-        // Server will sync on next poll
-      }
+      } catch {}
     }
 
     if (!afterWin.gameOver && afterWin.vsComputer && afterWin.currentPlayer === afterWin.computerPlayer) {
@@ -318,7 +323,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   resetGame: async (isRemote = false) => {
-    stopPolling();
+    disconnectWebSocket();
     const { rows, cols, mode, vsComputer, numPlayers, gameId, localPlayerId, playerNames, playerStats, isOnline } = get().state;
     const board = createBoard(rows, cols);
     const startPlayer = isOnline ? 1 as PlayerID : (Math.floor(Math.random() * numPlayers) + 1) as PlayerID;
@@ -356,7 +361,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     if (isOnline && gameId) {
-      startPolling(gameId, localPlayerId || 1);
+      connectWebSocket(gameId, localPlayerId || 1);
     }
 
     if (vsComputer && startPlayer === 2) {
@@ -377,7 +382,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         new Blob([JSON.stringify({ gameId })], { type: 'application/json' }),
       );
     }
-    stopPolling();
+    disconnectWebSocket();
     sessionStorage.removeItem('gs_session');
     const storedNames = JSON.parse(localStorage.getItem('gs_playerNames') || '{"1":"Player 1","2":"Player 2","3":"Player 3","4":"Player 4"}');
     set({

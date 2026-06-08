@@ -1,3 +1,5 @@
+import { broadcastAll } from '../ws-rooms.js';
+
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const MEMORY_STORE = new Map<string, any>();
@@ -148,5 +150,6 @@ export default async function handler(req: any, res: any) {
   }
 
   await setGame(gameId, afterWin);
+  broadcastAll(gameId, { type: 'state', state: afterWin });
   return res.status(200).json({ state: afterWin });
 }

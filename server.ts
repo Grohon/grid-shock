@@ -2,6 +2,8 @@ import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { WebSocketServer } from 'ws';
+import { register, unregister, broadcastAll, getConnectedPlayerIds } from './api/ws-rooms.js';
 
 const __dirname = import.meta.dirname || fileURLToPath(new URL('.', import.meta.url)).replace(/\/$/, '');
 const PORT = Number(process.env.PORT) || 3000;
@@ -122,6 +124,30 @@ const server = createServer(async (req, res) => {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Internal Server Error' }));
   }
+});
+
+const wss = new WebSocketServer({ noServer: true });
+
+const ROOM_PATH_RE = /^\/ws\?gameId=([a-z]+-[a-z]+-\d{2})&playerId=(\d+)$/;
+
+server.on('upgrade', (req, socket, head) => {
+  const url = req.url || '';
+  const match = url.match(ROOM_PATH_RE);
+  if (!match) { socket.destroy(); return; }
+
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    const gameId = match[1];
+    const playerId = Number(match[2]);
+    register(gameId, playerId, ws);
+
+    ws.on('close', async () => {
+      unregister(gameId, playerId);
+      const remaining = getConnectedPlayerIds(gameId);
+      if (remaining.length > 0) {
+        broadcastAll(gameId, { type: 'abandon' });
+      }
+    });
+  });
 });
 
 server.listen(PORT, () => {

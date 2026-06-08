@@ -1,3 +1,5 @@
+import { broadcast } from '../ws-rooms.js';
+
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const MEMORY_STORE = new Map<string, any>();
@@ -40,6 +42,7 @@ export default async function handler(req: any, res: any) {
   state.abandoned = true;
   state.gameOver = true;
   await setGame(gameId, state);
+  broadcast(gameId, { type: 'abandon' });
   // Remove from game index
   if (UPSTASH_URL && UPSTASH_TOKEN) {
     try {
