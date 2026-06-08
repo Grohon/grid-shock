@@ -1,122 +1,111 @@
 import { create } from 'zustand';
 
-import { GameState, PlayerID, Cell, Board } from './types';
-import { getExplosionSteps, checkWin, getComputerMove, isValidMove } from './engine';
+import { GameState, PlayerID } from './types';
+import { createBoard, getExplosionSteps, checkWin, getComputerMove, isValidMove } from './engine';
 
-/** Helper to create an empty board */
-function createBoard(rows: number, cols: number): Board {
-  const board: Board = [];
-  for (let i = 0; i < rows; i++) {
-    const row: Cell[] = [];
-    for (let j = 0; j < cols; j++) {
-      row.push({ owner: null, count: 0 });
-    }
-    board.push(row);
-  }
-  return board;
-}
-
-import { Peer } from 'peerjs';
+const API_BASE = '/api';
 
 interface GameStore {
   state: GameState;
   isAnimating: boolean;
-  initGame: (rows: number, cols: number, mode: 'classic' | 'fixed', vsComputer: boolean, numPlayers: number, gameId?: string, localPlayerId?: PlayerID, isOnline?: boolean) => void;
+  initGame: (rows: number, cols: number, mode: 'classic' | 'fixed', vsComputer: boolean, numPlayers: number, gameId?: string, localPlayerId?: PlayerID, isOnline?: boolean, serverState?: GameState) => void;
   attemptMove: (x: number, y: number, isRemote?: boolean) => Promise<void>;
   resetGame: (isRemote?: boolean) => void;
   clearGame: () => void;
   setPlayerName: (playerId: PlayerID, name: string) => void;
+  setMode: (mode: 'classic' | 'fixed') => void;
 }
 
-// Networking state (managed outside Zustand to avoid serialization issues)
-export const ROOM_PREFIX = 'GS_ROOM_';
-let peerInstance: Peer | null = null;
-let activeConnections: DataConnection[] = [];
+let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-/** Helper to clean up existing connections */
-const cleanupNetworking = () => {
-  activeConnections.forEach(conn => {
-    try { conn.close(); } catch {}
-  });
-  activeConnections = [];
-  if (peerInstance) {
-    try { peerInstance.destroy(); } catch {}
-    peerInstance = null;
+const stopPolling = () => {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
   }
 };
 
-/** Shared message handler */
-const handlePeerData = (data: any) => {
-  const store = useGameStore.getState();
-  const { type, x, y, player, state: remoteState, name: remoteName } = data;
-
-  if (type === 'MOVE' && player === store.state.currentPlayer) {
-    store.attemptMove(x, y, true);
-  }
-  else if (type === 'RESET') {
-    store.resetGame(true);
-  }
-  else if (type === 'NAME_UPDATE') {
-    useGameStore.setState(s => {
-      const newNames = { ...s.state.playerNames, [player]: remoteName };
-      localStorage.setItem('gs_playerNames', JSON.stringify(newNames));
-      return { state: { ...s.state, playerNames: newNames } };
-    });
-  }
-  else if (type === 'SYNC_REQUEST') {
-    // Host: update joiner's name immediately, then send state back
-    if (remoteName && player) {
-      useGameStore.setState(s => {
-        const newNames = { ...s.state.playerNames, [player]: remoteName };
-        localStorage.setItem('gs_playerNames', JSON.stringify(newNames));
-        return { state: { ...s.state, playerNames: newNames } };
-      });
+const startPolling = (gameId: string, localPlayerId: PlayerID) => {
+  stopPolling();
+  let prevMoveKey = '';
+  pollTimer = setInterval(async () => {
+    const store = useGameStore.getState();
+    if (!store.state.isOnline) {
+      stopPolling();
+      return;
     }
-    broadcastToPeers({
-      type: 'SYNC_RESPONSE',
-      state: useGameStore.getState().state
-    });
-  }
-  else if (type === 'SYNC_RESPONSE' && remoteState) {
-    const localId = store.state.localPlayerId;
-    const localNames = JSON.parse(localStorage.getItem('gs_playerNames') || '{"1":"Player 1","2":"Player 2","3":"Player 3","4":"Player 4"}');
-    const localName = localNames[localId as PlayerID];
-    const mergedNames = {
-      ...remoteState.playerNames,
-      [localId as PlayerID]: localName || remoteState.playerNames[localId as PlayerID]
-    };
-    localStorage.setItem('gs_playerNames', JSON.stringify(mergedNames));
-    useGameStore.setState({
-      state: {
-        ...remoteState,
-        localPlayerId: localId,
-        gameId: store.state.gameId,
-        playerNames: mergedNames
+    try {
+      const res = await fetch(`${API_BASE}/game/${gameId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const serverState = data.state as GameState;
+      const localState = store.state;
+      const moveKey = serverState.lastMove ? `${serverState.lastMove.x},${serverState.lastMove.y}` : '';
+
+      const serverReset = !serverState.lastMove && localState.lastMove;
+      const gameOverChanged = localState.gameOver !== serverState.gameOver;
+
+      const isNewMove = moveKey && moveKey !== prevMoveKey;
+
+      if (isNewMove || serverReset || gameOverChanged) {
+        if (isNewMove) {
+          const { x: mx, y: my, player: movingPlayer } = serverState.lastMove!;
+
+          if (movingPlayer && movingPlayer !== localPlayerId) {
+            const prevBoard = localState.board;
+            const placedBoard = prevBoard.map(row => row.map(c => ({ ...c })));
+            if (placedBoard[mx]?.[my]) {
+              placedBoard[mx][my].count += 1;
+              placedBoard[mx][my].owner = movingPlayer;
+            }
+            const placedState: GameState = {
+              ...localState,
+              board: placedBoard,
+              playerNames: serverState.playerNames,
+              lastMove: { x: mx, y: my },
+              initialPlaced: { ...localState.initialPlaced, [movingPlayer]: true },
+            };
+            const steps = getExplosionSteps(placedState);
+            for (let i = 1; i < steps.length; i++) {
+              await new Promise(r => setTimeout(r, 500));
+              useGameStore.setState({
+              state: {
+                ...steps[i],
+                localPlayerId,
+                isOnline: true,
+                playerStats: localState.playerStats,
+                playerNames: steps[i].playerNames,
+              }
+              });
+            }
+          }
+        }
+
+        if (isNewMove) prevMoveKey = moveKey;
+        if (serverReset) prevMoveKey = '';
+
+        // Sync to authoritative server state
+        useGameStore.setState({
+          state: {
+            ...serverState,
+            localPlayerId,
+            isOnline: true,
+            playerStats: store.state.playerStats,
+            playerNames: serverState.playerNames,
+          }
+        });
+      } else {
+        // No state change — sync player names from server
+        if (JSON.stringify(serverState.playerNames) !== JSON.stringify(store.state.playerNames)) {
+          useGameStore.setState({
+            state: { ...store.state, playerNames: serverState.playerNames }
+          });
+        }
       }
-    });
-    // Backup: broadcast joiner's name to host (in case SYNC_REQUEST name didn't arrive)
-    if (localId && localId !== 1 && localName) {
-      broadcastToPeers({ type: 'NAME_UPDATE', name: localName, player: localId });
+    } catch {
+      // Silently retry on next poll
     }
-  }
-};
-
-// ICE servers for cross-network NAT traversal
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-  ],
-};
-
-/** Broadcast to all connected peers */
-const broadcastToPeers = (data: any) => {
-  activeConnections.forEach(conn => {
-    if (conn.open) {
-      conn.send(data);
-    }
-  });
+  }, 1000);
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -137,31 +126,37 @@ export const useGameStore = create<GameStore>((set, get) => ({
     lastMove: undefined,
   },
   isAnimating: false,
-  initGame: (rows, cols, mode, vsComputer, numPlayers = 2, gameId?: string, localPlayerId?: PlayerID, isOnline = false) => {
-    // 0. Cleanup old networking
-    cleanupNetworking();
 
-    // Defensive clamping
-    const r = Math.max(3, Math.min(10, rows));
-    const c = Math.max(3, Math.min(10, cols));
-
-    const board = createBoard(r, c);
-    // Generate a random 6-character room ID if not provided
-    const id = gameId || String(Math.floor(Math.random() * 900000) + 100000);
-
-    // For online, host always starts first; otherwise randomize
-    const startPlayer = isOnline ? 1 as PlayerID : (Math.floor(Math.random() * numPlayers) + 1) as PlayerID;
-
-    // Load local stats and names
+  initGame: (rows, cols, mode, vsComputer, numPlayers = 2, gameId?: string, localPlayerId?: PlayerID, isOnline = false, serverState?: GameState) => {
+    stopPolling();
     const storedStats = JSON.parse(localStorage.getItem('gs_stats') || '{"wins":0, "losses":0}');
     const storedNames = JSON.parse(localStorage.getItem('gs_playerNames') || '{"1":"Player 1","2":"Player 2","3":"Player 3","4":"Player 4"}');
+
+    if (serverState && isOnline) {
+      const localId = (localPlayerId || serverState.localPlayerId || 1) as PlayerID;
+      const newState: GameState = {
+        ...serverState,
+        localPlayerId: localId,
+        playerStats: storedStats,
+        playerNames: serverState.playerNames,
+        isOnline: true,
+      };
+      set({ isAnimating: false, state: newState });
+      startPolling(gameId || serverState.gameId || '', localId);
+      return;
+    }
+
+    const r = Math.max(3, Math.min(10, rows));
+    const c = Math.max(3, Math.min(10, cols));
     const localId = localPlayerId || 1;
     const localName = storedNames[localId as PlayerID] || `Player ${localId}`;
 
-    // Online: only keep local name for Player 1, others get defaults until synced
     const playerNames = isOnline
       ? { 1: localName, 2: 'Player 2', 3: 'Player 3', 4: 'Player 4' }
-      : { ...(get().state.playerNames || storedNames), ...storedNames, [localId]: localName };
+      : { ...storedNames, [localId]: localName };
+
+    const board = createBoard(r, c);
+    const startPlayer = isOnline ? 1 as PlayerID : (Math.floor(Math.random() * numPlayers) + 1) as PlayerID;
 
     const newState: GameState = {
       board,
@@ -170,8 +165,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       rows: r,
       cols: c,
       numPlayers,
-      gameId: id,
-      localPlayerId,
+      gameId,
+      localPlayerId: localId,
       gameOver: false,
       winner: undefined,
       vsComputer: vsComputer && numPlayers === 2,
@@ -185,61 +180,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     set({ isAnimating: false, state: newState });
 
-    // 1. Networking Setup
     if (isOnline) {
-      if (localPlayerId === 1) {
-        // HOST: Setup peer server with prefixed ID
-        useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'connecting' } }));
-        peerInstance = new Peer(ROOM_PREFIX + id, { config: ICE_SERVERS });
-        
-        peerInstance.on('open', () => {
-          useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'waiting' } }));
-        });
-
-        peerInstance.on('connection', (conn) => {
-          activeConnections.push(conn);
-          conn.on('open', () => {
-            useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'connected' } }));
-          });
-          conn.on('data', handlePeerData);
-          conn.on('close', () => {
-            activeConnections = activeConnections.filter(c => c !== conn);
-            if (activeConnections.length === 0) {
-              useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'waiting' } }));
-            }
-          });
-        });
-
-        peerInstance.on('error', () => {
-          useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'disconnected' } }));
-        });
-      } else if (gameId && localPlayerId) {
-        // JOINER: Connect to host
-        useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'connecting' } }));
-        peerInstance = new Peer({ config: ICE_SERVERS });
-        peerInstance.on('open', () => {
-          const conn = peerInstance!.connect(ROOM_PREFIX + gameId);
-          activeConnections.push(conn);
-          conn.on('open', () => {
-            useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'connected' } }));
-          conn.on('data', handlePeerData);
-            // Send sync request with joiner's name
-            conn.send({ type: 'SYNC_REQUEST', name: localName, player: localPlayerId });
-          });
-          conn.on('close', () => {
-            activeConnections = activeConnections.filter(c => c !== conn);
-            useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'disconnected' } }));
-          });
-        });
-        peerInstance.on('error', () => {
-          useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'disconnected' } }));
-        });
-      }
-    } else {
-      useGameStore.setState(s => ({ state: { ...s.state, connectionStatus: 'offline' } }));
+      startPolling(gameId || '', localId);
     }
 
-    // Trigger computer move if it starts first
     if (vsComputer && startPlayer === 2) {
       setTimeout(async () => {
         const currentStore = useGameStore.getState();
@@ -249,14 +193,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }, 800);
     }
   },
+
   attemptMove: async (x, y, isRemote = false) => {
     const { state, isAnimating } = get();
     if (state.gameOver || isAnimating) return;
 
-    // Allow moves if it's our turn OR it's a remote move OR it's a local bot move
     const isBotTurn = state.vsComputer && state.currentPlayer === state.computerPlayer;
     const isOurTurn = !state.localPlayerId || state.currentPlayer === state.localPlayerId || isBotTurn;
-    
     if (!isRemote && !isOurTurn) return;
 
     const cell = state.board[x][y];
@@ -264,81 +207,69 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     set({ isAnimating: true });
 
-    // 1. Initial placement
-    const placedState = { ...state, board: state.board.map(row => row.map(c => ({ ...c }))), lastMove: { x, y } };
+    const isOnlineLocal = state.isOnline && !isRemote && state.localPlayerId;
+
+    const placedState = { ...state, board: state.board.map(row => row.map(c => ({ ...c }))), lastMove: { x, y, player: state.currentPlayer } };
     const targetCell = placedState.board[x][y];
     targetCell.count += 1;
     targetCell.owner = placedState.currentPlayer;
-
     if (!placedState.initialPlaced[placedState.currentPlayer]) {
-      // We must clone the record to avoid mutating original state
       placedState.initialPlaced = { ...placedState.initialPlaced, [placedState.currentPlayer]: true };
     }
-
     set({ state: placedState });
 
-    // Sync the move to other peers if it's a local move
-    if (!isRemote && state.isOnline) {
-      broadcastToPeers({
-        type: 'MOVE',
-        x,
-        y,
-        player: state.currentPlayer
-      });
-    }
-
-    // 2. Resolve explosions in steps
     const steps = getExplosionSteps(placedState);
-    
-    // The first step is the placed state, so we start from the second step
     for (let i = 1; i < steps.length; i++) {
       await new Promise(resolve => setTimeout(resolve, 500));
       set({ state: steps[i] });
     }
 
-    // 3. Finalize turn (win check and player switch)
     const finalState = { ...get().state };
     const afterWin = checkWin(finalState);
-    
+
     if (afterWin.gameOver) {
-      // Update local stats
       const stats = { ...finalState.playerStats };
       if (afterWin.winner === finalState.localPlayerId || (finalState.vsComputer && afterWin.winner === 1)) {
         stats.wins += 1;
       } else if (finalState.localPlayerId || finalState.vsComputer) {
-        // Only count losses if we had an assigned role or were playing vs computer
         stats.losses += 1;
       }
       localStorage.setItem('gs_stats', JSON.stringify(stats));
       afterWin.playerStats = stats;
     } else {
-      // Switch to next player, skipping those who are out
       let nextPlayer = (afterWin.currentPlayer % afterWin.numPlayers + 1) as PlayerID;
-      
       let attempts = 0;
       while (attempts < 4) {
         const hasPlaced = afterWin.initialPlaced[nextPlayer];
         const ownsCells = afterWin.board.some(row => row.some(c => c.owner === nextPlayer));
-        
         if (!hasPlaced || ownsCells) {
           afterWin.currentPlayer = nextPlayer;
           break;
         }
-        
         nextPlayer = (nextPlayer % afterWin.numPlayers + 1) as PlayerID;
         attempts++;
       }
     }
-    
+
     set({ state: afterWin, isAnimating: false });
 
-    // 4. Trigger Computer turn if needed
+    // Submit online move to server for persistence & sync
+    if (isOnlineLocal) {
+      try {
+        await fetch(`${API_BASE}/game/move`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gameId: state.gameId, playerId: state.localPlayerId, x, y }),
+        });
+      } catch {
+        // Server will sync on next poll
+      }
+    }
+
     if (!afterWin.gameOver && afterWin.vsComputer && afterWin.currentPlayer === afterWin.computerPlayer) {
-      // Small delay to ensure React/Zustand state has flushed
       setTimeout(async () => {
         const currentStore = useGameStore.getState();
         if (currentStore.isAnimating || currentStore.state.gameOver) return;
-        
         const move = getComputerMove(currentStore.state);
         if (move) {
           await currentStore.attemptMove(move[0], move[1]);
@@ -347,10 +278,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
   },
 
-  resetGame: (isRemote = false) => {
-    const { rows, cols, mode, vsComputer, numPlayers, gameId, localPlayerId, playerNames, playerStats } = get().state;
+  resetGame: async (isRemote = false) => {
+    stopPolling();
+    const { rows, cols, mode, vsComputer, numPlayers, gameId, localPlayerId, playerNames, playerStats, isOnline } = get().state;
     const board = createBoard(rows, cols);
-    const startPlayer = (Math.floor(Math.random() * numPlayers) + 1) as PlayerID;
+    const startPlayer = isOnline ? 1 as PlayerID : (Math.floor(Math.random() * numPlayers) + 1) as PlayerID;
 
     const newState: GameState = {
       ...get().state,
@@ -374,12 +306,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     set({ isAnimating: false, state: newState });
 
-    // Broadcast reset if it's a local action
-    if (!isRemote) {
-      broadcastToPeers({ type: 'RESET' });
+    if (isOnline && !isRemote && gameId) {
+      try {
+        await fetch(`${API_BASE}/game/reset`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gameId, playerId: localPlayerId }),
+        });
+      } catch {}
     }
 
-    // Trigger computer move if it starts first
+    if (isOnline && gameId) {
+      startPolling(gameId, localPlayerId || 1);
+    }
+
     if (vsComputer && startPlayer === 2) {
       setTimeout(async () => {
         const currentStore = useGameStore.getState();
@@ -390,8 +330,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
   },
 
-  // Clear all state to go back to setup screen
   clearGame: () => {
+    stopPolling();
     const storedNames = JSON.parse(localStorage.getItem('gs_playerNames') || '{"1":"Player 1","2":"Player 2","3":"Player 3","4":"Player 4"}');
     set({
       state: {
@@ -418,12 +358,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const newNames = { ...state.playerNames, [playerId]: name };
     localStorage.setItem('gs_playerNames', JSON.stringify(newNames));
     set({ state: { ...state, playerNames: newNames } });
-    
-    // Sync with others
-    broadcastToPeers({ type: 'NAME_UPDATE', name, player: playerId });
+
+    if (state.isOnline && state.gameId) {
+      fetch(`${API_BASE}/game/name`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gameId: state.gameId,
+          playerId,
+          name,
+        }),
+      }).catch(() => {});
+    }
   },
 
-  // Update mode without resetting the board (used for settings mid‑game)
   setMode: (mode: 'classic' | 'fixed') => {
     set(state => ({
       state: { ...state.state, mode },

@@ -31,14 +31,14 @@ export default function Play() {
 
   return (
     <div className="w-full h-full flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-hidden relative">
-      {/* Fixed Room ID for Mobile - prevents card jumping */}
-      {isOnline && state.gameId && (
+      {/* Room ID display for online games */}
+      {state.gameId && state.isOnline && (
         <div className="fixed top-4 left-4 z-30 sm:static sm:p-0">
           <button
             onClick={handleCopy}
             className="flex items-center gap-2 bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-material-outline/10 shadow-m3-1 transition-all active:scale-90 group"
           >
-            <div className={`w-1.5 h-1.5 rounded-full ${state.connectionStatus === 'connected' ? 'bg-green-500 animate-pulse' : state.connectionStatus === 'waiting' ? 'bg-amber-500 animate-pulse' : state.connectionStatus === 'disconnected' ? 'bg-red-500' : 'bg-gray-400'}`} />
+            <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
             <span className="text-[11px] font-black text-material-primary tracking-tight">
               {copied ? 'COPIED!' : 'ROOM: ' + state.gameId}
             </span>

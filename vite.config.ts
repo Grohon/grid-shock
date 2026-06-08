@@ -1,10 +1,87 @@
-import { defineConfig } from "vite";
+import { defineConfig, type ViteDevServer } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+import type { IncomingMessage, ServerResponse } from "node:http";
+
+/** Vite plugin that serves api/ routes during dev (no separate server needed) */
+function apiRoutesPlugin() {
+  const routes: Array<{ pattern: RegExp; method: string; modulePath: string; paramName?: string }> = [
+    { pattern: /^\/game\/create$/, method: 'POST', modulePath: '/api/game/create.ts' },
+    { pattern: /^\/game\/join$/, method: 'POST', modulePath: '/api/game/join.ts' },
+    { pattern: /^\/game\/move$/, method: 'POST', modulePath: '/api/game/move.ts' },
+    { pattern: /^\/game\/reset$/, method: 'POST', modulePath: '/api/game/reset.ts' },
+    { pattern: /^\/game\/name$/, method: 'POST', modulePath: '/api/game/name.ts' },
+    { pattern: /^\/game\/rooms$/, method: 'GET', modulePath: '/api/game/rooms.ts' },
+    { pattern: /^\/game\/([^/]+)$/, method: 'GET', modulePath: '/api/game/[id].ts', paramName: 'id' },
+  ];
+
+  function polyfillVercelResponse(res: ServerResponse) {
+    const r = res as any;
+    if (!r.status) {
+      r.status = (code: number) => { r.statusCode = code; return r; };
+    }
+    if (!r.json) {
+      r.json = (data: unknown) => {
+        r.setHeader('Content-Type', 'application/json');
+        r.end(JSON.stringify(data));
+      };
+    }
+  }
+
+  function parseBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+    return new Promise((resolve) => {
+      if (req.method !== 'POST' && req.method !== 'PUT') { resolve({}); return; }
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => {
+        const raw = Buffer.concat(chunks).toString();
+        try { resolve(raw ? JSON.parse(raw) : {}); }
+        catch { resolve({}); }
+      });
+    });
+  }
+
+  return {
+    name: 'api-routes',
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use('/api', async (req, res, next) => {
+        const url = req.url || '/';
+        const method = req.method || 'GET';
+
+        for (const route of routes) {
+          const match = url.match(route.pattern);
+          if (!match || route.method !== method) continue;
+
+          try {
+            polyfillVercelResponse(res);
+            (req as any).body = await parseBody(req);
+            (req as any).query = {};
+            if (route.paramName && match[1]) {
+              (req as any).query[route.paramName] = match[1];
+            }
+
+            const mod = await server.ssrLoadModule(route.modulePath);
+            await mod.default(req, res);
+            return;
+          } catch (e) {
+            console.error(`[api] ${method} ${url} failed:`, e);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Internal Server Error' }));
+            return;
+          }
+        }
+
+        next();
+      });
+    },
+  } as any;
+}
 
 export default defineConfig({
   plugins: [
     react(),
+    apiRoutesPlugin(),
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: [

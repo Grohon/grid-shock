@@ -1,26 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { useGameStore, ROOM_PREFIX } from '../store';
-import { Peer } from 'peerjs';
+import { useGameStore } from '../store';
 
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-  ],
-};
+const API_BASE = '/api';
 
 export default function ModeToggle() {
   const initGame = useGameStore(state => state.initGame);
   const gameState = useGameStore(state => state.state);
 
-  // Load all player names from localStorage
   const [playerNames, setPlayerNames] = useState<Record<number, string>>(() => {
     const raw = JSON.parse(localStorage.getItem('gs_playerNames') || '{"1":"Player 1","2":"Player 2","3":"Player 3","4":"Player 4"}');
     return { 1: raw['1'], 2: raw['2'], 3: raw['3'], 4: raw['4'] };
   });
 
-  // Sync names to localStorage and store on change
   useEffect(() => {
     localStorage.setItem('gs_playerNames', JSON.stringify(playerNames));
     useGameStore.setState(s => ({
@@ -49,7 +40,6 @@ export default function ModeToggle() {
   const [joinId, setJoinId] = useState('');
   const [isOnline, setIsOnline] = useState(false);
 
-  // Save settings to localStorage when they change
   useEffect(() => {
     localStorage.setItem('gameMode', mode);
     localStorage.setItem('gameRows', rows.toString());
@@ -62,49 +52,89 @@ export default function ModeToggle() {
   const [isChecking, setIsChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleStart = () => {
-    localStorage.setItem('gs_playerNames', JSON.stringify(playerNames));
-    const effectiveVsComputer = numPlayers === 2 && !isOnline && vsComputer;
-    initGame(rows, cols, mode, effectiveVsComputer, numPlayers, undefined, isOnline ? 1 : undefined, isOnline);
+  const [rooms, setRooms] = useState<Array<{ gameId: string; mode: string; rows: number; cols: number; numPlayers: number; filledSlots: number; hostName: string }>>([]);
+  const [loadingRooms, setLoadingRooms] = useState(false);
+
+  const fetchRooms = async () => {
+    setLoadingRooms(true);
+    try {
+      const res = await fetch(`${API_BASE}/game/rooms`);
+      if (res.ok) {
+        const data = await res.json();
+        setRooms(data.rooms || []);
+      }
+    } catch {}
+    setLoadingRooms(false);
   };
 
-  const handleJoin = () => {
-    if (joinId.length < 4) return;
+  useEffect(() => {
+    if (isOnline && view === 'join') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchRooms();
+      const interval = setInterval(fetchRooms, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [isOnline, view]);
 
+  const handleStart = async () => {
     localStorage.setItem('gs_playerNames', JSON.stringify(playerNames));
-    setIsChecking(true);
+
+    if (isOnline) {
+      try {
+        const res = await fetch(`${API_BASE}/game/create`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode, rows, cols, numPlayers, playerName: playerNames[1] }),
+        });
+        if (!res.ok) {
+          setError('Failed to create room. Try again.');
+          return;
+        }
+        const data = await res.json();
+        initGame(rows, cols, mode, false, numPlayers, data.gameId, 1, true, data.state);
+      } catch {
+        setError('Network error. Check your connection.');
+      }
+      return;
+    }
+
+    const effectiveVsComputer = numPlayers === 2 && vsComputer;
+    initGame(rows, cols, mode, effectiveVsComputer, numPlayers);
+  };
+
+  const joinRoom = async (gameId: string) => {
+    localStorage.setItem('gs_playerNames', JSON.stringify(playerNames));
     setError(null);
 
-    const tempPeer = new Peer({ config: ICE_SERVERS });
-
-    tempPeer.on('open', () => {
-      const conn = tempPeer.connect(ROOM_PREFIX + joinId);
-
-      const timeout = setTimeout(() => {
-        tempPeer.destroy();
-        setError('Room not found or host unavailable.');
-        setIsChecking(false);
-      }, 5000);
-
-      conn.on('open', () => {
-        clearTimeout(timeout);
-        tempPeer.destroy();
-        initGame(rows, cols, mode, false, numPlayers, joinId, 2, true);
-        setIsChecking(false);
+    try {
+      const res = await fetch(`${API_BASE}/game/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gameId, playerName: playerNames[1] }),
       });
-
-      conn.on('error', () => {
-        clearTimeout(timeout);
-        tempPeer.destroy();
-        setError('Could not connect to room.');
-        setIsChecking(false);
-      });
-    });
-
-    tempPeer.on('error', () => {
+      const data = await res.json();
+      if (res.ok) {
+        initGame(rows, cols, mode, false, numPlayers, gameId, data.playerId, true, data.state);
+        return true;
+      }
+      setError(data.error || 'Could not join room.');
+    } catch {
       setError('Network error. Check your connection.');
-      setIsChecking(false);
-    });
+    }
+    return false;
+  };
+
+  const handleJoinRoom = async (gameId: string) => {
+    setIsChecking(true);
+    await joinRoom(gameId);
+    setIsChecking(false);
+  };
+
+  const handleJoin = async () => {
+    if (joinId.length < 4) return;
+    setIsChecking(true);
+    await joinRoom(joinId);
+    setIsChecking(false);
   };
 
   return (
@@ -341,45 +371,100 @@ export default function ModeToggle() {
           </button>
         </div>
       ) : (
-        <div className="space-y-6 py-4 animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="flex flex-col gap-4">
-            <label className="text-sm font-bold text-material-onSurface px-1">
-              Invite Code
-            </label>
+        <div className="space-y-4 py-2 animate-in fade-in slide-in-from-right-4 duration-300">
+          {/* Available Rooms */}
+          <div className="flex items-center justify-between px-1">
+            <label className="text-sm font-bold text-material-onSurface">Available Rooms</label>
+            <button
+              onClick={fetchRooms}
+              disabled={loadingRooms}
+              className="text-[11px] font-bold text-material-primary hover:underline disabled:opacity-50"
+            >
+              {loadingRooms ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+
+          {loadingRooms && rooms.length === 0 ? (
+            <div className="flex items-center justify-center py-6 text-material-onSurfaceVariant/60 text-sm font-medium">
+              <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Loading rooms...
+            </div>
+          ) : rooms.length === 0 ? (
+            <div className="text-center py-6 text-material-onSurfaceVariant/60 text-sm font-medium bg-material-surfaceVariant/20 rounded-m3-lg border border-material-outline/10">
+              No rooms available. Create one!
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {rooms.map(room => (
+                <div
+                  key={room.gameId}
+                  className="flex items-center justify-between p-3 bg-material-surfaceVariant/20 rounded-m3-lg border border-material-outline/10 hover:bg-material-surfaceVariant/40 transition-all"
+                >
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-material-onSurface truncate">{room.hostName}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${room.mode === 'classic' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
+                        {room.mode}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-material-onSurfaceVariant/70 font-medium mt-0.5">
+                      <span>{room.rows}x{room.cols}</span>
+                      <span>·</span>
+                      <span>{room.filledSlots}/{room.numPlayers} players</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleJoinRoom(room.gameId)}
+                    className="bg-material-primary text-material-onPrimary px-3 py-1.5 rounded-m3-md text-xs font-bold shadow-m3-1 hover:shadow-m3-2 transition-all active:scale-95 shrink-0 ml-2"
+                  >
+                    Join
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="relative flex items-center gap-3 py-2">
+            <div className="flex-1 border-t border-material-outline/20" />
+            <span className="text-[10px] font-bold text-material-onSurfaceVariant/40 uppercase tracking-wider">or enter code</span>
+            <div className="flex-1 border-t border-material-outline/20" />
+          </div>
+
+          <div className="flex flex-col gap-3">
             <input
               type="text"
               placeholder="ENTER 6-DIGIT CODE"
               maxLength={6}
               value={joinId}
               onChange={e => setJoinId(e.target.value.replace(/[^0-9]/g, ''))}
-              className="w-full bg-material-surfaceVariant/30 border-2 border-material-primary/20 rounded-m3-lg px-6 py-4 text-center text-2xl font-black tracking-widest text-material-primary placeholder:text-material-outline/30 focus:border-material-primary focus:outline-none transition-all uppercase"
+              className="w-full bg-material-surfaceVariant/30 border-2 border-material-primary/20 rounded-m3-lg px-6 py-3 text-center text-xl font-black tracking-widest text-material-primary placeholder:text-material-outline/30 focus:border-material-primary focus:outline-none transition-all uppercase"
             />
-            <p className="text-xs text-center text-material-onSurfaceVariant px-4">
-              Enter the unique room ID from your friend to join their session.
-            </p>
             {error && (
               <p className="text-xs text-center text-red-500 font-bold bg-red-50 py-2 rounded-m3-md animate-in fade-in slide-in-from-top-1">
                 {error}
               </p>
             )}
+            <button
+              disabled={joinId.length < 4 || isChecking}
+              onClick={handleJoin}
+              className="m3-button-filled w-full py-3 shadow-m3-2 hover:shadow-m3-3 disabled:opacity-50 disabled:grayscale transition-all flex items-center justify-center gap-2"
+            >
+              {isChecking ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Joining...
+                </>
+              ) : (
+                'Join Room'
+              )}
+            </button>
           </div>
-          <button
-            disabled={joinId.length < 4 || isChecking}
-            onClick={handleJoin}
-            className="m3-button-filled w-full text-lg py-4 shadow-m3-2 hover:shadow-m3-3 disabled:opacity-50 disabled:grayscale transition-all flex items-center justify-center gap-2"
-          >
-            {isChecking ? (
-              <>
-                <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Checking Room...
-              </>
-            ) : (
-              'Join Room'
-            )}
-          </button>
         </div>
       )}
     </div>

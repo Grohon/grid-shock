@@ -28,6 +28,6 @@ export interface GameState {
   playerStats: { wins: number; losses: number };
   isOnline: boolean;
   initialPlaced: Record<PlayerID, boolean>;
-  lastMove?: { x: number; y: number };
+  lastMove?: { x: number; y: number; player?: PlayerID };
 }
 

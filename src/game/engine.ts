@@ -1,4 +1,39 @@
-import { GameState, PlayerID, Cell } from './types';
+import { GameState, PlayerID, Cell, Board } from './types';
+
+/** Create an empty board */
+export function createBoard(rows: number, cols: number): Board {
+  const board: Board = [];
+  for (let i = 0; i < rows; i++) {
+    const row: Cell[] = [];
+    for (let j = 0; j < cols; j++) {
+      row.push({ owner: null, count: 0 });
+    }
+    board.push(row);
+  }
+  return board;
+}
+
+/** Create a fresh initial GameState */
+export function initGameState(rows: number, cols: number, mode: 'classic' | 'fixed', vsComputer: boolean, numPlayers: number, gameId?: string, playerNames?: Record<PlayerID, string>): GameState {
+  return {
+    board: createBoard(rows, cols),
+    currentPlayer: 1 as PlayerID,
+    mode,
+    rows,
+    cols,
+    numPlayers,
+    gameOver: false,
+    winner: undefined,
+    vsComputer: vsComputer && numPlayers === 2,
+    computerPlayer: (vsComputer && numPlayers === 2) ? 2 : undefined,
+    gameId,
+    isOnline: !!gameId,
+    playerNames: playerNames || { 1: 'Player 1', 2: 'Player 2', 3: 'Player 3', 4: 'Player 4' },
+    playerStats: { wins: 0, losses: 0 },
+    initialPlaced: { 1: false, 2: false, 3: false, 4: false },
+    lastMove: undefined,
+  };
+}
 
 /** Return a new GameState with the given modifications (shallow copy) */
 function cloneState(state: GameState): GameState {
