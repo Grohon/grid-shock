@@ -97,17 +97,16 @@ const startPolling = (gameId: string, localPlayerId: PlayerID) => {
           }
         });
       } else {
-        // Sync authoritative game state to prevent turn deadlock
-        const turnChanged = localState.currentPlayer !== serverState.currentPlayer;
-        const boardChanged = JSON.stringify(localState.board) !== JSON.stringify(serverState.board);
-        if (turnChanged || boardChanged) {
+        // Sync critical game state to prevent turn deadlock (preserve local board during animation)
+        if (localState.currentPlayer !== serverState.currentPlayer ||
+            localState.gameOver !== serverState.gameOver) {
           useGameStore.setState({
             state: {
-              ...serverState,
-              localPlayerId,
-              isOnline: true,
-              playerStats: store.state.playerStats,
-              playerNames: serverState.playerNames,
+              ...store.state,
+              currentPlayer: serverState.currentPlayer,
+              gameOver: serverState.gameOver,
+              winner: serverState.winner,
+              abandoned: serverState.abandoned,
             }
           });
         } else if (JSON.stringify(serverState.playerNames) !== JSON.stringify(store.state.playerNames)) {
