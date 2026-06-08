@@ -1,4 +1,4 @@
-import type { GameState } from '../../src/game/types';
+import type { GameState } from './types';
 
 const MEMORY_STORE = new Map<string, GameState>();
 let kvClient: {
@@ -30,7 +30,7 @@ export async function getAllGameIds(): Promise<string[]> {
 export async function getGame(id: string): Promise<GameState | null> {
   await initKv();
   if (kvClient) {
-    return (await kvClient.get(`game:${id}`)) || null;
+    return (await kvClient.get(`game:${id}`) as GameState | undefined) || null;
   }
   return MEMORY_STORE.get(id) || null;
 }

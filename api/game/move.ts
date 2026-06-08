@@ -1,9 +1,8 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { PlayerID } from '../../src/game/types';
-import { isValidMove, resolveExplosions, checkWin } from '../../src/game/engine';
+import type { PlayerID } from '../lib/types';
+import { isValidMove, resolveExplosions, checkWin } from '../lib/engine';
 import { getGame, setGame } from '../lib/game-store';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "start": "tsx server.ts",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
@@ -30,6 +31,7 @@
     "globals": "^17.6.0",
     "postcss": "^8.5.12",
     "tailwindcss": "^4.2.4",
+    "tsx": "^4.22.4",
     "typescript": "^5.3.2",
     "typescript-eslint": "^8.59.2",
     "vite": "^5.0.10",
