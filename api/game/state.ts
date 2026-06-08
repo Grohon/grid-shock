@@ -41,8 +41,9 @@ export default async function handler(req: any, res: any) {
   if (playerId && !Array.isArray(playerId)) {
     const pid = Number(playerId);
     const now = Date.now();
-    const prev = state.lastPoll || {};
-    state.lastPoll = { ...prev, [pid]: now };
+    if (!state.lastPoll) state.lastPoll = {};
+    const prev = state.lastPoll;
+    state.lastPoll[pid] = now;
 
     for (const key of Object.keys(prev)) {
       const k = Number(key);

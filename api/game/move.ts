@@ -116,7 +116,7 @@ export default async function handler(req: any, res: any) {
 
   const state = await getGame(gameId);
   if (!state) return res.status(404).json({ error: 'Game not found' });
-  if (state.gameOver) return res.status(400).json({ error: 'Game is already over' });
+  if (state.gameOver || state.abandoned) return res.status(400).json({ error: 'Game is already over' });
   if (state.currentPlayer !== playerId) return res.status(400).json({ error: 'Not your turn' });
 
   const cell = state.board[x]?.[y];
