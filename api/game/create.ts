@@ -75,7 +75,8 @@ export default async function handler(req: any, res: any) {
         headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
       });
       const d = await r.json();
-      const idx: string[] = d.result || [];
+      const raw = typeof d.result === 'string' ? JSON.parse(d.result) : d.result;
+      const idx: string[] = Array.isArray(raw) ? raw : [];
       if (!idx.includes(gameId)) idx.push(gameId);
       await fetch(`${UPSTASH_URL}/set/game:index`, {
         method: 'POST',

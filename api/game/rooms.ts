@@ -22,7 +22,8 @@ async function getAllGameIds(): Promise<string[]> {
         headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
       });
       const d = await r.json();
-      if (Array.isArray(d.result)) return d.result;
+      const parsed = typeof d.result === 'string' ? JSON.parse(d.result) : d.result;
+      if (Array.isArray(parsed)) return parsed;
     } catch {}
   }
   return Array.from(MEMORY_STORE.keys());
