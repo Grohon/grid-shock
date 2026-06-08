@@ -1,0 +1,23 @@
+function createBoard(rows: number, cols: number) {
+  const board: any[] = [];
+  for (let i = 0; i < rows; i++) {
+    const row: any[] = [];
+    for (let j = 0; j < cols; j++) {
+      row.push({ owner: null, count: 0 });
+    }
+    board.push(row);
+  }
+  return board;
+}
+
+export function initGameState(rows: number, cols: number, mode: string) {
+  return {
+    board: createBoard(rows, cols),
+    currentPlayer: 1,
+    mode, rows, cols, numPlayers: 2, gameOver: false,
+    playerNames: { 1: 'P1', 2: 'P2', 3: 'P3', 4: 'P4' },
+    playerStats: { wins: 0, losses: 0 },
+    initialPlaced: { 1: false, 2: false, 3: false, 4: false },
+    isOnline: true,
+  };
+}
