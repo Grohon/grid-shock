@@ -9,7 +9,7 @@ async function getGame(id: string) {
         headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
       });
       const d = await r.json();
-      if (d.result) return d.result;
+      if (d.result) return typeof d.result === 'string' ? JSON.parse(d.result) : d.result;
     } catch {}
   }
   return MEMORY_STORE.get(id) || null;

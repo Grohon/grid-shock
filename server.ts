@@ -50,7 +50,7 @@ const API_ROUTES: Array<{ pattern: RegExp; method: string; path: string; paramNa
   { pattern: /^\/game\/leave$/, method: 'POST', path: '/game/leave.ts' },
   { pattern: /^\/game\/name$/, method: 'POST', path: '/game/name.ts' },
   { pattern: /^\/game\/rooms$/, method: 'GET', path: '/game/rooms.ts' },
-  { pattern: /^\/game\/([^/]+)$/, method: 'GET', path: '/game/[id].ts', paramName: 'id' },
+  { pattern: /^\/game\/state$/, method: 'GET', path: '/game/state.ts' },
 ];
 
 async function serveStatic(urlPath: string, res: ServerResponse): Promise<boolean> {

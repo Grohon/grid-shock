@@ -13,7 +13,7 @@ function apiRoutesPlugin() {
     { pattern: /^\/game\/leave$/, method: 'POST', modulePath: '/api/game/leave.ts' },
     { pattern: /^\/game\/name$/, method: 'POST', modulePath: '/api/game/name.ts' },
     { pattern: /^\/game\/rooms$/, method: 'GET', modulePath: '/api/game/rooms.ts' },
-    { pattern: /^\/game\/([^/]+)$/, method: 'GET', modulePath: '/api/game/[id].ts', paramName: 'id' },
+    { pattern: /^\/game\/state$/, method: 'GET', modulePath: '/api/game/state.ts' },
   ];
 
   function polyfillVercelResponse(res: ServerResponse) {
