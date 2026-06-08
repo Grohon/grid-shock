@@ -30,5 +30,6 @@ export interface GameState {
   initialPlaced: Record<PlayerID, boolean>;
   lastMove?: { x: number; y: number; player?: PlayerID };
   abandoned?: boolean;
+  lastPoll?: Record<PlayerID, number>;
 }
 

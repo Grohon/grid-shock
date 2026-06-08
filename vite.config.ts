@@ -65,7 +65,9 @@ function apiRoutesPlugin() {
           try {
             polyfillVercelResponse(res);
             (req as any).body = await parseBody(req);
-            (req as any).query = {};
+            const queryIdx = url.indexOf('?');
+            const qs = queryIdx >= 0 ? url.slice(queryIdx + 1) : '';
+            (req as any).query = Object.fromEntries(new URLSearchParams(qs));
             if (route.paramName && match[1]) {
               (req as any).query[route.paramName] = match[1];
             }

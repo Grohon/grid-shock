@@ -35,7 +35,7 @@ const startPolling = (gameId: string, localPlayerId: PlayerID) => {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/game/${gameId}`);
+      const res = await fetch(`${API_BASE}/game/${gameId}?playerId=${localPlayerId}`);
       if (!res.ok) return;
       const data = await res.json();
       const serverState = data.state as GameState;
