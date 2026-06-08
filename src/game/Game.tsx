@@ -13,11 +13,11 @@ export default function Game() {
   const isPlaying = rows > 0;
   const processedRoomRef = useRef<string | null>(null);
 
-  const playerBackgrounds = {
-    1: 'linear-gradient(135deg, #F3EFFF 0%, #EADDFF 100%)',
-    2: 'linear-gradient(135deg, #E0F2F1 0%, #B2DFDB 100%)',
-    3: 'linear-gradient(135deg, #FFFDE7 0%, #FFF59D 100%)',
-    4: 'linear-gradient(135deg, #FFF1F0 0%, #FFD1D1 100%)',
+  const playerColors = {
+    1: '#D0BCFF',
+    2: '#A7D8D0',
+    3: '#FFF176',
+    4: '#FFCDD2',
   };
 
   // Must run BEFORE address bar effect so it can read the original URL
@@ -137,9 +137,9 @@ export default function Game() {
 
   return (
     <div
-      className="min-h-screen w-full flex flex-col items-center justify-center transition-all duration-1000 ease-in-out overflow-x-hidden"
+      className="min-h-screen w-full flex flex-col items-center justify-center transition-[background-color] duration-700 ease-in-out overflow-x-hidden"
       style={{
-        background: !isPlaying ? '#FEF7FF' : playerBackgrounds[currentPlayer],
+        backgroundColor: !isPlaying ? '#FEF7FF' : playerColors[currentPlayer],
       }}
     >
       {roomError && (
