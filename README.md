@@ -2,7 +2,7 @@
 
 Tactical turn-based chain reaction game. Place atoms on a grid, overload cells to trigger explosions and convert enemies' cells. Last player standing wins.
 
-Built with **React**, **TypeScript**, **Tailwind CSS 4**, **Zustand**, and **Vite**. Deployed on **Vercel** with **Upstash Redis** for online multiplayer state.
+Built with **React**, **TypeScript**, **Tailwind CSS 4**, **Zustand**, and **Vite**. Deployed on **Vercel** with **Upstash Redis** (direct `fetch()` REST API) for online multiplayer state.
 
 ## How to Play
 
@@ -82,7 +82,7 @@ REST endpoints at `/api/game/*`:
 | `/api/game/leave` | POST | Mark game abandoned |
 | `/api/game/name` | POST | Update player name |
 | `/api/game/rooms` | GET | List active rooms |
-| `/api/game/:id` | GET | Poll game state |
+| `/api/game/state` | GET | Poll game state (`?id=X&playerId=X`) |
 
 ## Room URLs
 
@@ -107,10 +107,9 @@ src/
 │       ├── Board.tsx         # Grid rendering
 │       └── Cell.tsx          # Single cell
 api/
-├── lib/game-store.ts         # Redis/in-memory storage
-└── game/                     # Vercel serverless handlers
+└── game/                     # Vercel serverless handlers (self-contained files)
     ├── create.ts, join.ts, move.ts, reset.ts
-    ├── leave.ts, name.ts, rooms.ts, [id].ts
+    ├── leave.ts, name.ts, rooms.ts, state.ts
 ```
 
 ## License

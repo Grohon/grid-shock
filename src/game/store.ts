@@ -351,11 +351,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   clearGame: () => {
-    const { gameId, localPlayerId, isOnline } = get().state;
+    const { gameId, isOnline } = get().state;
     if (isOnline && gameId) {
       navigator.sendBeacon(
         `${API_BASE}/game/leave`,
-        JSON.stringify({ gameId, playerId: localPlayerId }),
+        new Blob([JSON.stringify({ gameId })], { type: 'application/json' }),
       );
     }
     stopPolling();
