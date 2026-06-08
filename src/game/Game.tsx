@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Home from './components/Home';
 import Play from './components/Play';
 import { useGameStore } from './store';
@@ -11,6 +11,7 @@ export default function Game() {
   const [roomError, setRoomError] = useState<string | null>(null);
   const [joiningRoom, setJoiningRoom] = useState(false);
   const isPlaying = rows > 0;
+  const processedRoomRef = useRef<string | null>(null);
 
   const playerBackgrounds = {
     1: 'linear-gradient(135deg, #F3EFFF 0%, #EADDFF 100%)',
@@ -19,33 +20,54 @@ export default function Game() {
     4: 'linear-gradient(135deg, #FFF1F0 0%, #FFD1D1 100%)',
   };
 
-  // Notify server when tab is closed during online game
+  // Must run BEFORE address bar effect so it can read the original URL
   useEffect(() => {
-    if (!isPlaying || !state.gameId || !state.isOnline) return;
-    const handleBeforeUnload = () => {
-      navigator.sendBeacon(
-        `${API_BASE}/game/leave`,
-        JSON.stringify({ gameId: state.gameId, playerId: state.localPlayerId }),
-      );
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isPlaying, state.gameId, state.isOnline, state.localPlayerId]);
-
-  // Update address bar to show room link
-  useEffect(() => {
-    if (isPlaying && state.gameId && state.isOnline) {
-      window.history.replaceState({}, '', `/room/${state.gameId}`);
-    } else if (!isPlaying && !joiningRoom) {
-      window.history.replaceState({}, '', '/');
-    }
-  }, [isPlaying, state.gameId, state.isOnline, joiningRoom]);
-
-  useEffect(() => {
-    const match = window.location.pathname.match(/^\/room\/(\d+)$/);
+    const match = window.location.pathname.match(/^\/room\/([a-z]+-[a-z]+-\d{2})$/);
     if (!match) return;
 
     const gameId = match[1];
+    if (processedRoomRef.current === gameId) return;
+    processedRoomRef.current = gameId;
+
+    // Reconnect: check for stored session (survives page refresh)
+    const stored = sessionStorage.getItem('gs_session');
+    if (stored) {
+      try {
+        const session = JSON.parse(stored);
+        if (session.gameId === gameId && session.isOnline) {
+          (async () => {
+            setJoiningRoom(true);
+            try {
+              const res = await fetch(`${API_BASE}/game/${gameId}`);
+              if (res.ok) {
+                const data = await res.json();
+                const serverState = data.state;
+                const storedRows = Number(localStorage.getItem('gameRows')) || 6;
+                const storedCols = Number(localStorage.getItem('gameCols')) || 6;
+                const storedMode = (localStorage.getItem('gameMode') as 'classic' | 'fixed') || 'fixed';
+                const storedNumPlayers = Number(localStorage.getItem('gameNumPlayers')) || 2;
+                initGame(
+                  storedRows, storedCols,
+                  serverState.mode || storedMode,
+                  false,
+                  serverState.numPlayers || storedNumPlayers,
+                  gameId, session.playerId, true, serverState,
+                );
+                setJoiningRoom(false);
+                return;
+              }
+            } catch {}
+            // Fall through to normal join on failure
+            processedRoomRef.current = null;
+            setJoiningRoom(false);
+          })();
+          return;
+        }
+      } catch {}
+      sessionStorage.removeItem('gs_session');
+    }
+
+    // Normal join flow
     const storedNames = JSON.parse(
       localStorage.getItem('gs_playerNames') ||
       '{"1":"Player 1","2":"Player 2","3":"Player 3","4":"Player 4"}'
@@ -73,15 +95,11 @@ export default function Game() {
           const storedNumPlayers = Number(localStorage.getItem('gameNumPlayers')) || 2;
 
           initGame(
-            storedRows,
-            storedCols,
+            storedRows, storedCols,
             data.state.mode || storedMode,
             false,
             data.state.numPlayers || storedNumPlayers,
-            gameId,
-            data.playerId,
-            true,
-            data.state,
+            gameId, data.playerId, true, data.state,
           );
         } else {
           setRoomError(data.error || 'Could not join room');
@@ -93,6 +111,28 @@ export default function Game() {
       setJoiningRoom(false);
     })();
   }, [initGame]);
+
+  // Update address bar to show room link (runs AFTER join effect)
+  useEffect(() => {
+    if (isPlaying && state.gameId && state.isOnline) {
+      window.history.replaceState({}, '', `/room/${state.gameId}`);
+    } else if (!isPlaying && !joiningRoom) {
+      window.history.replaceState({}, '', '/');
+    }
+  }, [isPlaying, state.gameId, state.isOnline, joiningRoom]);
+
+  // Notify server when tab is closed during online game
+  useEffect(() => {
+    if (!isPlaying || !state.gameId || !state.isOnline) return;
+    const handleBeforeUnload = () => {
+      navigator.sendBeacon(
+        `${API_BASE}/game/leave`,
+        JSON.stringify({ gameId: state.gameId, playerId: state.localPlayerId }),
+      );
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isPlaying, state.gameId, state.isOnline, state.localPlayerId]);
 
   if (joiningRoom) {
     return (

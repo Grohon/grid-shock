@@ -1,13 +1,18 @@
 import type { GameState } from '../../src/game/types';
 
 const MEMORY_STORE = new Map<string, GameState>();
-let kvClient: { get: (...args: unknown[]) => Promise<unknown>; set: (...args: unknown[]) => Promise<void>; del: (...args: unknown[]) => Promise<void>; keys: (...args: unknown[]) => Promise<string[]> } | null = null;
+let kvClient: {
+  get: (key: string) => Promise<unknown>;
+  set: (key: string, value: unknown) => Promise<unknown>;
+  del: (key: string) => Promise<unknown>;
+  keys: (pattern?: string) => Promise<string[]>;
+} | null = null;
 
 async function initKv() {
   if (kvClient !== undefined) return;
   try {
-    const mod = await import('@vercel/kv');
-    kvClient = mod.kv;
+    const { Redis } = await import('@upstash/redis');
+    kvClient = Redis.fromEnv() as any;
   } catch {
     kvClient = null;
   }

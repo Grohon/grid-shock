@@ -436,10 +436,10 @@ export default function ModeToggle() {
           <div className="flex flex-col gap-3">
             <input
               type="text"
-              placeholder="ENTER 6-DIGIT CODE"
-              maxLength={6}
+              placeholder="PASTE ROOM CODE"
+              maxLength={20}
               value={joinId}
-              onChange={e => setJoinId(e.target.value.replace(/[^0-9]/g, ''))}
+              onChange={e => setJoinId(e.target.value)}
               className="w-full bg-material-surfaceVariant/30 border-2 border-material-primary/20 rounded-m3-lg px-6 py-3 text-center text-xl font-black tracking-widest text-material-primary placeholder:text-material-outline/30 focus:border-material-primary focus:outline-none transition-all uppercase"
             />
             {error && (

@@ -144,6 +144,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       };
       set({ isAnimating: false, state: newState });
       startPolling(gameId || serverState.gameId || '', localId);
+      sessionStorage.setItem('gs_session', JSON.stringify({
+        gameId: gameId || serverState.gameId,
+        playerId: localId,
+        isOnline: true,
+      }));
       return;
     }
 
@@ -182,6 +187,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     if (isOnline) {
       startPolling(gameId || '', localId as PlayerID);
+      sessionStorage.setItem('gs_session', JSON.stringify({
+        gameId,
+        playerId: localId as PlayerID,
+        isOnline: true,
+      }));
     }
 
     if (vsComputer && startPlayer === 2) {
@@ -339,6 +349,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       );
     }
     stopPolling();
+    sessionStorage.removeItem('gs_session');
     const storedNames = JSON.parse(localStorage.getItem('gs_playerNames') || '{"1":"Player 1","2":"Player 2","3":"Player 3","4":"Player 4"}');
     set({
       state: {
