@@ -50,6 +50,22 @@ export default async function handler(req: any, res: any) {
       if (prev[k] && (now - prev[k]) > STALE_MS) {
         state.abandoned = true;
         state.gameOver = true;
+        // Remove from game index
+        if (UPSTASH_URL && UPSTASH_TOKEN) {
+          try {
+            const r = await fetch(`${UPSTASH_URL}/get/game:index`, {
+              headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
+            });
+            const d = await r.json();
+            const raw = typeof d.result === 'string' ? JSON.parse(d.result) : d.result;
+            const idx: string[] = (Array.isArray(raw) ? raw : []).filter((g: string) => g !== id);
+            await fetch(`${UPSTASH_URL}/set/game:index`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(idx),
+            });
+          } catch {}
+        }
         break;
       }
     }
