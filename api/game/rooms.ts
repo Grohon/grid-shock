@@ -1,33 +1,4 @@
-const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
-const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-const MEMORY_STORE = new Map<string, any>();
-
-async function getGame(id: string) {
-  if (UPSTASH_URL && UPSTASH_TOKEN) {
-    try {
-      const r = await fetch(`${UPSTASH_URL}/get/game:${id}`, {
-        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
-      });
-      const d = await r.json();
-      if (d.result) return typeof d.result === 'string' ? JSON.parse(d.result) : d.result;
-    } catch {}
-  }
-  return MEMORY_STORE.get(id) || null;
-}
-
-async function getAllGameIds(): Promise<string[]> {
-  if (UPSTASH_URL && UPSTASH_TOKEN) {
-    try {
-      const r = await fetch(`${UPSTASH_URL}/get/game:index`, {
-        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
-      });
-      const d = await r.json();
-      const parsed = typeof d.result === 'string' ? JSON.parse(d.result) : d.result;
-      if (Array.isArray(parsed)) return parsed;
-    } catch {}
-  }
-  return Array.from(MEMORY_STORE.keys());
-}
+import { getGame, getAllGameIds } from '../db.js';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });

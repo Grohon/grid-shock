@@ -133,7 +133,7 @@ const ROOM_PATH_RE = /^\/ws\?gameId=([a-z]+-[a-z]+-\d{2})&playerId=(\d+)$/;
 server.on('upgrade', (req, socket, head) => {
   const url = req.url || '';
   const match = url.match(ROOM_PATH_RE);
-  if (!match) { socket.destroy(); return; }
+  if (!match) return;
 
   wss.handleUpgrade(req, socket, head, (ws) => {
     const gameId = match[1];

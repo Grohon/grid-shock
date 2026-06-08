@@ -54,7 +54,7 @@ function apiRoutesPlugin() {
       server.httpServer?.on('upgrade', (req, socket, head) => {
         const url = req.url || '';
         const match = url.match(ROOM_PATH_RE);
-        if (!match) { socket.destroy(); return; }
+        if (!match) return;
         wss.handleUpgrade(req, socket, head, (ws) => {
           const gameId = match[1];
           const playerId = Number(match[2]);

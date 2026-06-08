@@ -1,34 +1,5 @@
+import { getGame, setGame, removeGameIndex } from '../db.js';
 import { broadcast } from '../ws-rooms.js';
-
-const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
-const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-const MEMORY_STORE = new Map<string, any>();
-
-async function getGame(id: string) {
-  if (UPSTASH_URL && UPSTASH_TOKEN) {
-    try {
-      const r = await fetch(`${UPSTASH_URL}/get/game:${id}`, {
-        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
-      });
-      const d = await r.json();
-      if (d.result) return typeof d.result === 'string' ? JSON.parse(d.result) : d.result;
-    } catch {}
-  }
-  return MEMORY_STORE.get(id) || null;
-}
-
-async function setGame(id: string, state: any) {
-  if (UPSTASH_URL && UPSTASH_TOKEN) {
-    try {
-      await fetch(`${UPSTASH_URL}/set/game:${id}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(state),
-      });
-    } catch {}
-  }
-  MEMORY_STORE.set(id, state);
-}
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -42,22 +13,7 @@ export default async function handler(req: any, res: any) {
   state.abandoned = true;
   state.gameOver = true;
   await setGame(gameId, state);
+  await removeGameIndex(gameId);
   broadcast(gameId, { type: 'abandon' });
-  // Remove from game index
-  if (UPSTASH_URL && UPSTASH_TOKEN) {
-    try {
-      const r = await fetch(`${UPSTASH_URL}/get/game:index`, {
-        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
-      });
-      const d = await r.json();
-      const raw = typeof d.result === 'string' ? JSON.parse(d.result) : d.result;
-      const idx: string[] = (Array.isArray(raw) ? raw : []).filter((g: string) => g !== gameId);
-      await fetch(`${UPSTASH_URL}/set/game:index`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(idx),
-      });
-    } catch {}
-  }
   return res.status(200).json({ state });
 }
