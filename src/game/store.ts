@@ -97,8 +97,20 @@ const startPolling = (gameId: string, localPlayerId: PlayerID) => {
           }
         });
       } else {
-        // No state change — sync player names from server
-        if (JSON.stringify(serverState.playerNames) !== JSON.stringify(store.state.playerNames)) {
+        // Sync authoritative game state to prevent turn deadlock
+        const turnChanged = localState.currentPlayer !== serverState.currentPlayer;
+        const boardChanged = JSON.stringify(localState.board) !== JSON.stringify(serverState.board);
+        if (turnChanged || boardChanged) {
+          useGameStore.setState({
+            state: {
+              ...serverState,
+              localPlayerId,
+              isOnline: true,
+              playerStats: store.state.playerStats,
+              playerNames: serverState.playerNames,
+            }
+          });
+        } else if (JSON.stringify(serverState.playerNames) !== JSON.stringify(store.state.playerNames)) {
           useGameStore.setState({
             state: { ...store.state, playerNames: serverState.playerNames }
           });
@@ -216,10 +228,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const cell = state.board[x][y];
     if (!isValidMove(cell, state.currentPlayer, state)) return;
 
-    set({ isAnimating: true });
-    if (!isRemote) playClick();
-
     const isOnlineLocal = state.isOnline && !isRemote && state.localPlayerId;
+    let afterWin: GameState;
+    let finalState: GameState;
+
+    set({ isAnimating: true });
+    try {
+    if (!isRemote) playClick();
 
     const placedState = { ...state, board: state.board.map(row => row.map(c => ({ ...c }))), lastMove: { x, y, player: state.currentPlayer } };
     const targetCell = placedState.board[x][y];
@@ -237,20 +252,25 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ state: steps[i] });
     }
 
-    const finalState = { ...get().state };
-    const afterWin = checkWin(finalState);
+    finalState = { ...get().state };
+    afterWin = checkWin(finalState);
+    } finally {
+      set({ isAnimating: false });
+    }
+
+    if (!afterWin) return;
 
     if (afterWin.gameOver) {
-      const stats = { ...finalState.playerStats };
-      if (afterWin.winner === finalState.localPlayerId || (finalState.vsComputer && afterWin.winner === 1)) {
+      const stats = { ...finalState!.playerStats };
+      if (afterWin.winner === finalState!.localPlayerId || (finalState!.vsComputer && afterWin.winner === 1)) {
         stats.wins += 1;
-      } else if (finalState.localPlayerId || finalState.vsComputer) {
+      } else if (finalState!.localPlayerId || finalState!.vsComputer) {
         stats.losses += 1;
       }
       localStorage.setItem('gs_stats', JSON.stringify(stats));
       afterWin.playerStats = stats;
       if (!isRemote) {
-        if (afterWin.winner === finalState.localPlayerId || (finalState.vsComputer && afterWin.winner === 1)) {
+        if (afterWin.winner === finalState!.localPlayerId || (finalState!.vsComputer && afterWin.winner === 1)) {
           playWin();
         } else {
           playLose();
@@ -271,7 +291,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     }
 
-    set({ state: afterWin, isAnimating: false });
+    set({ state: afterWin });
 
     // Submit online move to server for persistence & sync
     if (isOnlineLocal) {
