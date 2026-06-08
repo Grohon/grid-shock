@@ -403,19 +403,21 @@ export default function ModeToggle() {
                   key={room.gameId}
                   className="flex items-center justify-between p-3 bg-material-surfaceVariant/20 rounded-m3-lg border border-material-outline/10 hover:bg-material-surfaceVariant/40 transition-all"
                 >
-                  <div className="flex flex-col min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-material-onSurface truncate">{room.hostName}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${room.mode === 'classic' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
-                        {room.mode}
-                      </span>
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-material-onSurface truncate">{room.hostName}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${room.mode === 'classic' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
+                          {room.mode}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-material-onSurfaceVariant/70 font-medium mt-0.5">
+                        <span className="font-mono">{room.gameId}</span>
+                        <span>·</span>
+                        <span>{room.rows}x{room.cols}</span>
+                        <span>·</span>
+                        <span>{room.filledSlots}/{room.numPlayers} players</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-material-onSurfaceVariant/70 font-medium mt-0.5">
-                      <span>{room.rows}x{room.cols}</span>
-                      <span>·</span>
-                      <span>{room.filledSlots}/{room.numPlayers} players</span>
-                    </div>
-                  </div>
                   <button
                     onClick={() => handleJoinRoom(room.gameId)}
                     className="bg-material-primary text-material-onPrimary px-3 py-1.5 rounded-m3-md text-xs font-bold shadow-m3-1 hover:shadow-m3-2 transition-all active:scale-95 shrink-0 ml-2"
