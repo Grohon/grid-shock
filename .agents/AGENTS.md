@@ -2,6 +2,7 @@
 
 ## Rules
 
+- **NEVER** push git commits to the remote repository (`git push`) unless explicitly instructed by the user.
 - Always run `npm run lint` after making code changes to verify ESLint passes.
 - Fix any lint errors before considering a task complete.
 - After lint, also run `npx tsc --noEmit` and `npm run build` to verify type safety and compilation.
