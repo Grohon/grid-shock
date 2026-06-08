@@ -9,9 +9,10 @@ export default function Play() {
   const [copied, setCopied] = React.useState(false);
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
 
-  const handleCopy = () => {
+  const handleCopyLink = () => {
     if (state.gameId) {
-      navigator.clipboard.writeText(state.gameId);
+      const link = `${window.location.origin}/room/${state.gameId}`;
+      navigator.clipboard.writeText(link);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -35,12 +36,13 @@ export default function Play() {
       {state.gameId && state.isOnline && (
         <div className="fixed top-4 left-4 z-30 sm:static sm:p-0">
           <button
-            onClick={handleCopy}
+            onClick={handleCopyLink}
             className="flex items-center gap-2 bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-material-outline/10 shadow-m3-1 transition-all active:scale-90 group"
+            title="Copy room link"
           >
             <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
             <span className="text-[11px] font-black text-material-primary tracking-tight">
-              {copied ? 'COPIED!' : 'ROOM: ' + state.gameId}
+              {copied ? 'LINK COPIED!' : 'ROOM: ' + state.gameId}
             </span>
           </button>
         </div>
@@ -61,7 +63,7 @@ export default function Play() {
               </span>
               <span className="text-base font-bold text-material-onSurface truncate">
                 {gameOver ? (
-                  state.vsComputer && winner === state.computerPlayer ? "🤖 Bot Wins!" : `🏆 ${state.playerNames[winner as PlayerID]} Wins!`
+                  state.abandoned ? '👋 Opponent left' : (state.vsComputer && winner === state.computerPlayer ? "🤖 Bot Wins!" : `🏆 ${state.playerNames[winner as PlayerID]} Wins!`)
                 ) : (
                   isAnimating ? 'Exploding...' : (state.vsComputer && state.currentPlayer === state.computerPlayer ? "🤖 Bot is thinking..." : `${state.playerNames[state.currentPlayer]}'s Turn`)
                 )}
@@ -71,7 +73,7 @@ export default function Play() {
 
           {/* Desktop Actions */}
           <div className="hidden sm:flex gap-2">
-            {gameOver && (
+            {gameOver && !state.abandoned && (
             <button
               onClick={() => resetGame()}
               className="bg-material-primary text-material-onPrimary px-4 py-1.5 rounded-m3-lg text-sm font-bold shadow-m3-1 hover:shadow-m3-2 transition-all active:scale-95"
@@ -115,7 +117,7 @@ export default function Play() {
                 </svg>
               </button>
             </div>
-            {gameOver && (
+            {gameOver && !state.abandoned && (
               <button
                 onClick={() => { resetGame(); setIsMenuOpen(false); }}
                 className="w-full flex items-center gap-3 px-4 py-3 bg-material-primary/10 text-material-primary rounded-m3-lg text-sm font-bold transition-all active:scale-95"

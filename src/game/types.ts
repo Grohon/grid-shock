@@ -29,5 +29,6 @@ export interface GameState {
   isOnline: boolean;
   initialPlaced: Record<PlayerID, boolean>;
   lastMove?: { x: number; y: number; player?: PlayerID };
+  abandoned?: boolean;
 }
 

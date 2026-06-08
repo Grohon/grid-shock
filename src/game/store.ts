@@ -44,10 +44,11 @@ const startPolling = (gameId: string, localPlayerId: PlayerID) => {
 
       const serverReset = !serverState.lastMove && localState.lastMove;
       const gameOverChanged = localState.gameOver !== serverState.gameOver;
+      const abandonedChanged = serverState.abandoned && !localState.abandoned;
 
       const isNewMove = moveKey && moveKey !== prevMoveKey;
 
-      if (isNewMove || serverReset || gameOverChanged) {
+      if (isNewMove || serverReset || gameOverChanged || abandonedChanged) {
         if (isNewMove) {
           const { x: mx, y: my, player: movingPlayer } = serverState.lastMove!;
 
@@ -148,12 +149,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     const r = Math.max(3, Math.min(10, rows));
     const c = Math.max(3, Math.min(10, cols));
-    const localId = localPlayerId || 1;
-    const localName = storedNames[localId as PlayerID] || `Player ${localId}`;
+    const localId = isOnline ? (localPlayerId || 1) : undefined;
 
     const playerNames = isOnline
-      ? { 1: localName, 2: 'Player 2', 3: 'Player 3', 4: 'Player 4' }
-      : { ...storedNames, [localId]: localName };
+      ? { 1: storedNames[(localPlayerId || 1) as PlayerID] || `Player ${localPlayerId || 1}`, 2: 'Player 2', 3: 'Player 3', 4: 'Player 4' }
+      : { ...storedNames };
 
     const board = createBoard(r, c);
     const startPlayer = isOnline ? 1 as PlayerID : (Math.floor(Math.random() * numPlayers) + 1) as PlayerID;
@@ -181,7 +181,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ isAnimating: false, state: newState });
 
     if (isOnline) {
-      startPolling(gameId || '', localId);
+      startPolling(gameId || '', localId as PlayerID);
     }
 
     if (vsComputer && startPlayer === 2) {
@@ -331,6 +331,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   clearGame: () => {
+    const { gameId, localPlayerId, isOnline } = get().state;
+    if (isOnline && gameId) {
+      navigator.sendBeacon(
+        `${API_BASE}/game/leave`,
+        JSON.stringify({ gameId, playerId: localPlayerId }),
+      );
+    }
     stopPolling();
     const storedNames = JSON.parse(localStorage.getItem('gs_playerNames') || '{"1":"Player 1","2":"Player 2","3":"Player 3","4":"Player 4"}');
     set({

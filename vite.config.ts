@@ -10,6 +10,7 @@ function apiRoutesPlugin() {
     { pattern: /^\/game\/join$/, method: 'POST', modulePath: '/api/game/join.ts' },
     { pattern: /^\/game\/move$/, method: 'POST', modulePath: '/api/game/move.ts' },
     { pattern: /^\/game\/reset$/, method: 'POST', modulePath: '/api/game/reset.ts' },
+    { pattern: /^\/game\/leave$/, method: 'POST', modulePath: '/api/game/leave.ts' },
     { pattern: /^\/game\/name$/, method: 'POST', modulePath: '/api/game/name.ts' },
     { pattern: /^\/game\/rooms$/, method: 'GET', modulePath: '/api/game/rooms.ts' },
     { pattern: /^\/game\/([^/]+)$/, method: 'GET', modulePath: '/api/game/[id].ts', paramName: 'id' },
@@ -44,6 +45,15 @@ function apiRoutesPlugin() {
   return {
     name: 'api-routes',
     configureServer(server: ViteDevServer) {
+      // SPA fallback for room links in dev
+      server.middlewares.use((req, _res, next) => {
+        const url = req.url || '/';
+        if (url.startsWith('/room/')) {
+          req.url = '/';
+        }
+        next();
+      });
+
       server.middlewares.use('/api', async (req, res, next) => {
         const url = req.url || '/';
         const method = req.method || 'GET';
