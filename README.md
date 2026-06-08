@@ -1,71 +1,118 @@
 # Grid Shock
 
-A tactical, turn-based game of chain reactions built with **React**, **TypeScript**, and **Tailwind CSS**.
+Tactical turn-based chain reaction game. Place atoms on a grid, overload cells to trigger explosions and convert enemies' cells. Last player standing wins.
 
+Built with **React**, **TypeScript**, **Tailwind CSS 4**, **Zustand**, and **Vite**. Deployed on **Vercel** with **Upstash Redis** for online multiplayer state.
 
-## 🎮 How to Play
+## How to Play
 
-The objective of **Grid Shock** is to take over the entire board by causing chain reactions.
+1. **Place**: Click a cell you own (or empty in Classic mode) to add an atom.
+2. **Explode**: When a cell reaches its threshold (corner=2, edge=3, interior=4; or 4 in Fixed mode), it explodes — each neighbor gains an atom and is taken over.
+3. **Chain**: Explosions cascade wave-by-wave until stable.
+4. **Win**: Own every non-empty cell on the board.
 
+Play **local pass-and-play** (2–4 players), **vs Computer**, or **online** via shareable room links.
 
-1.  **Placement**: On your turn, click on an empty cell or a cell you already own to add an atom.
-2.  **Explosions**: Each cell has a "threshold" based on its neighbors:
-    *   **Corners**: 2 atoms
-    *   **Edges**: 3 atoms
-    *   **Interior**: 4 atoms
-3.  **Chain Reaction**: When a cell reaches its threshold, it explodes! It sends its atoms to all adjacent cells (Top, Bottom, Left, Right).
-4.  **Takeover**: When an explosion hits a neighbor, that cell is taken over by your color. If the neighbor reaches its threshold, it also explodes, triggering a chain reaction.
-5.  **Winning**: You win when you are the only player left with atoms on the board.
+## Features
 
-## ✨ Features
+- **Online Multiplayer**: Vercel serverless + Upstash Redis. Share a room link (`/room/blue-fox-42`) — no account needed.
+- **Room Listing**: Browse active public rooms and join with one click.
+- **vs Computer**: Minimax AI (depth 3) with alpha-beta pruning.
+- **Two Modes**: Classic (dynamic thresholds by position) or Fixed (threshold always 4).
+- **Custom Grid**: 3×3 up to 10×10.
+- **Reconnect**: Page refresh preserves your game via `sessionStorage`.
+- **Disconnect Detection**: Opponent tab closed? Auto-abandons after 10s of silence.
+- **Sound & Haptics**: Web Audio tones + Vibration API. Mute toggle persisted to `localStorage`.
+- **PWA**: Installable, works offline.
+- **Persistent Settings**: Player names, stats (wins/losses), and game preferences saved locally.
+- **Material 3 UI**: Responsive, glassmorphism, last-move highlight.
 
-*   **Two Game Modes**:
-    *   **Classic**: Dynamic thresholds based on cell position (2, 3, or 4).
-    *   **Fixed**: A consistent threshold of 4 for all cells.
-*   **Dynamic UI**: The entire environment reacts to the current player's turn with shifting gradients.
-*   **Smooth Animations**: Visualize the chain reaction waves with animated atom clusters.
-*   **Customizable Grid**: Play on boards ranging from 3x3 to 10x10.
-*   **Persistent Settings**: Your preferred game mode and grid size are remembered between sessions.
-*   **Material 3 Design**: A premium, modern interface with glassmorphism effects.
+## Tech Stack
 
-## 🛠️ Tech Stack
+| Layer | Tech |
+|-------|------|
+| Frontend | React 18, TypeScript, Zustand 4 |
+| Styling | Tailwind CSS 4 + PostCSS |
+| Build | Vite 5 + @vitejs/plugin-react |
+| Backend | Vercel serverless functions (API routes) |
+| Database | Upstash Redis (in-memory fallback for dev) |
+| PWA | vite-plugin-pwa (Workbox) |
+| Linting | ESLint 9 (flat config), typescript-eslint |
+| Testing | Vitest + jsdom |
 
-*   **Framework**: [React 18](https://reactjs.org/)
-*   **Language**: [TypeScript](https://www.typescriptlang.org/)
-*   **Styling**: [Tailwind CSS 4](https://tailwindcss.com/)
-*   **State Management**: [Zustand](https://github.com/pmndrs/zustand)
-*   **Build Tool**: [Vite](https://vitejs.dev/)
-*   **Deployment**: [Vercel](https://vercel.com/)
+## Quick Start
 
-## 🚀 Getting Started
+```bash
+# install
+npm install
 
-### Prerequisites
+# dev (frontend + API routes)
+npm run dev
 
-*   Node.js (v18 or higher)
-*   npm or yarn
+# lint + typecheck + build
+npm run lint
+npx tsc --noEmit
+npm run build
 
-### Installation
+# test
+npm run test
+```
 
-1.  Clone the repository:
-    ```bash
-    git clone https://github.com/Grohon/grid-shock.git
-    ```
+### Environment Variables (optional)
 
-2.  Install dependencies:
-    ```bash
-    npm install
-    ```
+For persistent online multiplayer across restarts, add to `.env.local`:
 
-3.  Start the development server:
-    ```bash
-    npm run dev
-    ```
+```
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+```
 
-4.  Build for production:
-    ```bash
-    npm run build
-    ```
+Without these, game state is in-memory (volatile, per-dev-server).
 
-## 📜 License
+## API
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+REST endpoints at `/api/game/*`:
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/game/create` | POST | Host creates a room |
+| `/api/game/join` | POST | Join a room |
+| `/api/game/move` | POST | Submit a move |
+| `/api/game/reset` | POST | Reset the board |
+| `/api/game/leave` | POST | Mark game abandoned |
+| `/api/game/name` | POST | Update player name |
+| `/api/game/rooms` | GET | List active rooms |
+| `/api/game/:id` | GET | Poll game state |
+
+## Room URLs
+
+Rooms use human-readable IDs like `blue-fox-42`. Share links work as:
+- `https://your-app.vercel.app/room/blue-fox-42`
+
+The joiner opens the link and auto-joins. On refresh, `sessionStorage` reconnects without re-joining.
+
+## Project Structure
+
+```
+src/
+├── game/
+│   ├── Game.tsx              # Root: URL join, reconnect, effects
+│   ├── store.ts              # Zustand store + polling networking
+│   ├── engine.ts             # Core game rules + Minimax AI
+│   ├── types.ts              # TypeScript interfaces
+│   ├── lib/sound.ts          # Web Audio API + haptics
+│   └── components/
+│       ├── ModeToggle.tsx    # Setup UI + room list
+│       ├── Play.tsx          # In-game HUD
+│       ├── Board.tsx         # Grid rendering
+│       └── Cell.tsx          # Single cell
+api/
+├── lib/game-store.ts         # Redis/in-memory storage
+└── game/                     # Vercel serverless handlers
+    ├── create.ts, join.ts, move.ts, reset.ts
+    ├── leave.ts, name.ts, rooms.ts, [id].ts
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
