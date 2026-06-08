@@ -2,12 +2,14 @@ import React from 'react';
 import Board from './Board';
 import { useGameStore } from '../store';
 import { PlayerID } from '../types';
+import { isMuted, toggleMute } from '../lib/sound';
 
 export default function Play() {
   const { state, resetGame, clearGame, isAnimating } = useGameStore();
   const { gameOver, winner, currentPlayer, isOnline } = state;
   const [copied, setCopied] = React.useState(false);
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const [muted, setMuted] = React.useState(isMuted());
 
   const handleCopyLink = () => {
     if (state.gameId) {
@@ -20,6 +22,11 @@ export default function Play() {
 
   const handleSettings = () => {
     clearGame();
+  };
+
+  const handleMute = () => {
+    toggleMute();
+    setMuted(isMuted());
   };
 
   const statusColors = {
@@ -72,7 +79,7 @@ export default function Play() {
           </div>
 
           {/* Desktop Actions */}
-          <div className="hidden sm:flex gap-2">
+          <div className="hidden sm:flex gap-1.5 items-center">
             {gameOver && !state.abandoned && (
             <button
               onClick={() => resetGame()}
@@ -81,6 +88,13 @@ export default function Play() {
                 Again
               </button>
             )}
+            <button
+              onClick={handleMute}
+              className="p-2 text-material-onSurfaceVariant hover:bg-black/5 rounded-full transition-all active:scale-90 text-lg"
+              title={muted ? 'Unmute' : 'Mute'}
+            >
+              {muted ? '🔇' : '🔊'}
+            </button>
             <button
               onClick={handleSettings}
               className="border border-material-outline/30 text-material-onSurfaceVariant px-4 py-1.5 rounded-m3-lg text-sm font-bold hover:bg-black/5 transition-all active:scale-95"
@@ -125,6 +139,12 @@ export default function Play() {
                 <span>🏆</span> Play Again
               </button>
             )}
+            <button
+              onClick={() => { handleMute(); setIsMenuOpen(false); }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-material-onSurfaceVariant hover:bg-black/5 rounded-m3-lg text-sm font-bold transition-all active:scale-95"
+            >
+              <span>{muted ? '🔇' : '🔊'}</span> {muted ? 'Unmute' : 'Mute'}
+            </button>
             <button
               onClick={() => { handleSettings(); setIsMenuOpen(false); }}
               className="w-full flex items-center gap-3 px-4 py-3 text-material-onSurfaceVariant hover:bg-black/5 rounded-m3-lg text-sm font-bold transition-all active:scale-95"

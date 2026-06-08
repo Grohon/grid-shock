@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import { GameState, PlayerID } from './types';
 import { createBoard, getExplosionSteps, checkWin, getComputerMove, isValidMove } from './engine';
+import { playClick, playExplosion, playWin, playLose } from './lib/sound';
 
 const API_BASE = '/api';
 
@@ -216,6 +217,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!isValidMove(cell, state.currentPlayer, state)) return;
 
     set({ isAnimating: true });
+    if (!isRemote) playClick();
 
     const isOnlineLocal = state.isOnline && !isRemote && state.localPlayerId;
 
@@ -231,6 +233,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const steps = getExplosionSteps(placedState);
     for (let i = 1; i < steps.length; i++) {
       await new Promise(resolve => setTimeout(resolve, 500));
+      playExplosion(1 + i * 0.3);
       set({ state: steps[i] });
     }
 
@@ -246,6 +249,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
       localStorage.setItem('gs_stats', JSON.stringify(stats));
       afterWin.playerStats = stats;
+      if (!isRemote) {
+        if (afterWin.winner === finalState.localPlayerId || (finalState.vsComputer && afterWin.winner === 1)) {
+          playWin();
+        } else {
+          playLose();
+        }
+      }
     } else {
       let nextPlayer = (afterWin.currentPlayer % afterWin.numPlayers + 1) as PlayerID;
       let attempts = 0;
