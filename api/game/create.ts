@@ -1,20 +1,54 @@
-import { initGameState } from './engine';
-import { setGame } from './game-store';
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const MEMORY_STORE = new Map<string, any>();
+
+async function setGame(id: string, state: any) {
+  if (UPSTASH_URL && UPSTASH_TOKEN) {
+    try {
+      await fetch(`${UPSTASH_URL}/set/game:${id}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(state),
+      });
+    } catch {}
+  }
+  MEMORY_STORE.set(id, state);
+}
+
+function createBoard(rows: number, cols: number): any[][] {
+  const board: any[] = [];
+  for (let i = 0; i < rows; i++) {
+    const row: any[] = [];
+    for (let j = 0; j < cols; j++) row.push({ owner: null, count: 0 });
+    board.push(row);
+  }
+  return board;
+}
+
+function initGameState(rows: number, cols: number, mode: string, _vsComputer: boolean, numPlayers: number, gameId?: string, playerNames?: Record<number, string>) {
+  return {
+    board: createBoard(rows, cols),
+    currentPlayer: 1,
+    mode, rows, cols, numPlayers,
+    gameOver: false,
+    winner: undefined,
+    vsComputer: _vsComputer && numPlayers === 2,
+    computerPlayer: (_vsComputer && numPlayers === 2) ? 2 : undefined,
+    gameId,
+    isOnline: !!gameId,
+    playerNames: playerNames || { 1: 'Player 1', 2: 'Player 2', 3: 'Player 3', 4: 'Player 4' },
+    playerStats: { wins: 0, losses: 0 },
+    initialPlaced: { 1: false, 2: false, 3: false, 4: false },
+    lastMove: undefined,
+  };
+}
 
 export default async function handler(req: any, res: any) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { mode, rows, cols, numPlayers, playerName } = req.body;
-
-  if (!mode || !rows || !cols || !numPlayers) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-
-  if (!['classic', 'fixed'].includes(mode)) {
-    return res.status(400).json({ error: 'Invalid mode' });
-  }
+  if (!mode || !rows || !cols || !numPlayers) return res.status(400).json({ error: 'Missing required fields' });
+  if (!['classic', 'fixed'].includes(mode)) return res.status(400).json({ error: 'Invalid mode' });
 
   const r = Math.max(3, Math.min(10, rows));
   const c = Math.max(3, Math.min(10, cols));
@@ -26,20 +60,13 @@ export default async function handler(req: any, res: any) {
   const suffix = Math.floor(Math.random() * 100).toString().padStart(2, '0');
   const gameId = `${a}-${noun}-${suffix}`;
   const playerNames = {
-    1: (playerName as string) || 'Player 1',
-    2: 'Player 2',
-    3: 'Player 3',
-    4: 'Player 4',
-  } as Record<1 | 2 | 3 | 4, string>;
+    1: playerName || 'Player 1',
+    2: 'Player 2', 3: 'Player 3', 4: 'Player 4',
+  };
 
   const state = initGameState(r, c, mode, false, numPlayers, gameId, playerNames);
   state.currentPlayer = 1;
-
   await setGame(gameId, state);
 
-  return res.status(200).json({
-    gameId: state.gameId,
-    playerId: 1,
-    state: { ...state, localPlayerId: 1 },
-  });
+  return res.status(200).json({ gameId: state.gameId, playerId: 1, state: { ...state, localPlayerId: 1 } });
 }
