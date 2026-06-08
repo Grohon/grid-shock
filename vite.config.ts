@@ -55,7 +55,9 @@ function apiRoutesPlugin() {
       });
 
       server.middlewares.use('/api', async (req, res, next) => {
-        const url = req.url || '/';
+        const fullUrl = req.url || '/';
+        const qIdx = fullUrl.indexOf('?');
+        const url = qIdx >= 0 ? fullUrl.slice(0, qIdx) : fullUrl;
         const method = req.method || 'GET';
 
         for (const route of routes) {
@@ -65,8 +67,8 @@ function apiRoutesPlugin() {
           try {
             polyfillVercelResponse(res);
             (req as any).body = await parseBody(req);
-            const queryIdx = url.indexOf('?');
-            const qs = queryIdx >= 0 ? url.slice(queryIdx + 1) : '';
+            const queryIdx = fullUrl.indexOf('?');
+            const qs = queryIdx >= 0 ? fullUrl.slice(queryIdx + 1) : '';
             (req as any).query = Object.fromEntries(new URLSearchParams(qs));
             if (route.paramName && match[1]) {
               (req as any).query[route.paramName] = match[1];

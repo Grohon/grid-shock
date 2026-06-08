@@ -38,7 +38,7 @@ export default function Game() {
           (async () => {
             setJoiningRoom(true);
             try {
-              const res = await fetch(`${API_BASE}/game/${gameId}`);
+              const res = await fetch(`${API_BASE}/game/${gameId}?playerId=${session.playerId}`);
               if (res.ok) {
                 const data = await res.json();
                 const serverState = data.state;
@@ -120,19 +120,6 @@ export default function Game() {
       window.history.replaceState({}, '', '/');
     }
   }, [isPlaying, state.gameId, state.isOnline, joiningRoom]);
-
-  // Notify server when tab is closed during online game
-  useEffect(() => {
-    if (!isPlaying || !state.gameId || !state.isOnline) return;
-    const handleBeforeUnload = () => {
-      navigator.sendBeacon(
-        `${API_BASE}/game/leave`,
-        JSON.stringify({ gameId: state.gameId, playerId: state.localPlayerId }),
-      );
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isPlaying, state.gameId, state.isOnline, state.localPlayerId]);
 
   if (joiningRoom) {
     return (
