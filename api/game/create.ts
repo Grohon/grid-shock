@@ -1,5 +1,5 @@
-import { initGameState } from '../lib/engine';
-import { setGame } from '../lib/game-store';
+import { initGameState } from './engine';
+import { setGame } from './game-store';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

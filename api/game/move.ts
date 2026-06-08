@@ -1,6 +1,6 @@
-import type { PlayerID } from '../lib/types';
-import { isValidMove, resolveExplosions, checkWin } from '../lib/engine';
-import { getGame, setGame } from '../lib/game-store';
+import type { PlayerID } from './types';
+import { isValidMove, resolveExplosions, checkWin } from './engine';
+import { getGame, setGame } from './game-store';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

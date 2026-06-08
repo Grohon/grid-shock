@@ -1,4 +1,4 @@
-import type { GameState } from '../game/types';
+import type { GameState } from './types';
 
 const MEMORY_STORE = new Map<string, GameState>();
 let kvClient: {

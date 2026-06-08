@@ -1,5 +1,5 @@
-import type { PlayerID } from '../lib/types';
-import { getGame, setGame } from '../lib/game-store';
+import type { PlayerID } from './types';
+import { getGame, setGame } from './game-store';
 
 const STALE_MS = 10_000;
 

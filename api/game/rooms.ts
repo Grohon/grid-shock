@@ -1,5 +1,5 @@
-import { getAllGameIds, getGame } from '../lib/game-store';
-import type { PlayerID } from '../lib/types';
+import { getAllGameIds, getGame } from './game-store';
+import type { PlayerID } from './types';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') {

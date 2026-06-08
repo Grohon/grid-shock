@@ -1,4 +1,4 @@
-import { getGame, setGame } from '../lib/game-store';
+import { getGame, setGame } from './game-store';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
