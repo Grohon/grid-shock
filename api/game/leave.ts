@@ -40,5 +40,20 @@ export default async function handler(req: any, res: any) {
   state.abandoned = true;
   state.gameOver = true;
   await setGame(gameId, state);
+  // Remove from game index
+  if (UPSTASH_URL && UPSTASH_TOKEN) {
+    try {
+      const r = await fetch(`${UPSTASH_URL}/get/game:index`, {
+        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
+      });
+      const d = await r.json();
+      const idx: string[] = (d.result || []).filter((g: string) => g !== gameId);
+      await fetch(`${UPSTASH_URL}/set/game:index`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(idx),
+      });
+    } catch {}
+  }
   return res.status(200).json({ state });
 }

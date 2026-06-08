@@ -18,11 +18,11 @@ async function getGame(id: string) {
 async function getAllGameIds(): Promise<string[]> {
   if (UPSTASH_URL && UPSTASH_TOKEN) {
     try {
-      const r = await fetch(`${UPSTASH_URL}/keys/game:*`, {
+      const r = await fetch(`${UPSTASH_URL}/get/game:index`, {
         headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
       });
       const d = await r.json();
-      if (d.result) return d.result.map((k: string) => k.replace('game:', ''));
+      if (Array.isArray(d.result)) return d.result;
     } catch {}
   }
   return Array.from(MEMORY_STORE.keys());

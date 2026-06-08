@@ -66,7 +66,24 @@ export default async function handler(req: any, res: any) {
 
   const state = initGameState(r, c, mode, false, numPlayers, gameId, playerNames);
   state.currentPlayer = 1;
+
   await setGame(gameId, state);
+  // Add to game index for room listing
+  if (UPSTASH_URL && UPSTASH_TOKEN) {
+    try {
+      const r = await fetch(`${UPSTASH_URL}/get/game:index`, {
+        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
+      });
+      const d = await r.json();
+      const idx: string[] = d.result || [];
+      if (!idx.includes(gameId)) idx.push(gameId);
+      await fetch(`${UPSTASH_URL}/set/game:index`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(idx),
+      });
+    } catch {}
+  }
 
   return res.status(200).json({ gameId: state.gameId, playerId: 1, state: { ...state, localPlayerId: 1 } });
 }
