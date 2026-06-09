@@ -15,7 +15,7 @@
 - **Host** (Player 1): calls `POST /api/game/create` → gets `gameId` (human-readable, e.g. `blue-fox-42`)
 - **Joiner**: clicks room link (`/room/blue-fox-42`), sees room list, or enters code → `POST /api/game/join`
 - **Moves**: client animates locally, then submits to `POST /api/game/move` (fire-and-forget)
-- **Sync**: both clients poll `GET /api/game/state?id=X&playerId=X` every **1s**; remote moves animated on detection
+- **Sync**: both clients poll `GET /api/game/state?id=X&playerId=X` every **300ms**; remote moves animated on detection
 - **Reset**: `POST /api/game/reset` — any player can trigger (no longer host-only)
 - **Leave**: `POST /api/game/leave` sets `abandoned=true` — sent via `sendBeacon` on Menu click (poll-based disconnect detection handles tab close)
 - **Names**: `POST /api/game/name` syncs player names; server names are **authoritative**
@@ -28,14 +28,12 @@
 - `processedRoomRef` prevents the join effect from firing twice for the same room
 
 ### Polling & Remote Move Animation
-- `startPolling()` in store.ts runs a 1s interval when online
+- `startPolling()` in store.ts runs a 300ms interval when online; fires immediately on start
 - Detects remote moves via `lastMove` comparison + `prevMoveKey` tracking
-- `serverReset` flag detects game resets (`lastMove` becomes undefined)
-- `gameOverChanged` flag detects game-over status flips
-- `abandonedChanged` flag detects opponent disconnect
-- Reconstructs placed state from previous board + `lastMove` coordinates
+- On detected move: reconstructs placed state from previous board + `lastMove` coordinates
 - Runs `getExplosionSteps` for animation on remote moves
-- Final state always synced to canonical server state (names included)
+- After animation, syncs to canonical server state (authoritative)
+- Server tracks `lastPoll[playerId]` timestamps; if opponent's poll >10s stale, auto-sets `abandoned=true`
 
 ### Room Listing
 - `GET /api/game/rooms` returns active rooms (not full, not game-over)

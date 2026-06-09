@@ -37,7 +37,7 @@
 ## 3. Architecture Summary
 
 - **Type**: Client-side SPA + Vercel serverless API routes
-- **Networking**: REST API (`api/game/*`) + polling (1s interval); game state in Upstash Redis via direct `fetch()` (REST API) with in-memory `Map` fallback
+- **Networking**: REST API (`api/game/*`) + polling (300ms interval); game state in Upstash Redis via direct `fetch()` (REST API) with in-memory `Map` fallback
 - **State**: Single Zustand store (`useGameStore`) holds all game state; polling managed via setInterval outside store
 - **Data Flow**:
   1. User clicks cell → `attemptMove()` in store
@@ -45,7 +45,7 @@
   3. Steps animated sequentially (500ms delay), plays sound per step
   4. Win check → player switch (skips eliminated players) → win/lose sound
    5. If online: move submitted to server (fire-and-forget) for persistence & sync
-   6. Both clients poll `GET /api/game/state?id=X&playerId=X` every 1s; remote moves animated on detection
+    6. Both clients poll `GET /api/game/state?id=X&playerId=X` every 300ms; remote moves animated on detection
 
 ## 4. Directory & Code Structure
 
@@ -129,7 +129,7 @@ REST API at `/api/game/*`:
 1. Client places atom locally + animates explosions (same as local)
 2. After animation, submits `{ gameId, playerId, x, y }` to `/api/game/move`
 3. Server validates move, resolves explosions, stores authoritative state
-4. Both clients poll `GET /api/game/state?id=X&playerId=X` every 1s
+4. Both clients poll `GET /api/game/state?id=X&playerId=X` every 300ms
 5. Polling detects remote moves via `lastMove` change → reconstructs placed state → animates explosions
 
 ### Room URL Flow
@@ -164,7 +164,7 @@ REST API at `/api/game/*`:
 
 ### Online Mode Rules
 - **Host** (Player 1) always starts first (no random)
-- Game state stored in Upstash Redis via direct `fetch()` REST API; polling interval 1s with `?id=X&playerId=X`
+- Game state stored in Upstash Redis via direct `fetch()` REST API; polling interval 300ms with `?id=X&playerId=X`
 - Remote moves animated on joiner side via reconstructed placed state + `getExplosionSteps`
 - Names synced via `POST /api/game/name` on change; server names are authoritative
 - Joiner's name comes from profile input (`playerNames[1]`) — not hardcoded to player 2
@@ -222,7 +222,7 @@ No separate server needed. For production-like testing, run `npm run build && np
 - ✅ ESLint setup (flat config, typescript-eslint, react-hooks)
 - ✅ Last-move outline highlight on board
 - ✅ Migrated from PeerJS P2P to server-based architecture
-- ✅ Public room listing with auto-refresh (1s poll / 5s room list)
+- ✅ Public room listing with auto-refresh (300ms game poll / 5s room list)
 - ✅ Server-authoritative player name sync
 - ✅ URL-based room joining (`/room/:id` + vercel rewrite)
 - ✅ Human-readable room IDs (adjective-noun-XX)
@@ -244,6 +244,7 @@ No separate server needed. For production-like testing, run `npm run build && np
 - `minimax()` multiplayer AI treats turn-taker as "current" (simplified, engine.ts:306)
 - `initialPlaced` duplication: set in both store.ts `attemptMove` and engine.ts `makeMove` (both correct)
 - No tests exist (`src/**/*.test.*` — empty)
+- WebSocket server code in `server.ts`/`vite.config.ts` is unused client-side (Vercel incompatible); kept for standalone server mode
 
 ## 10. Pending Tasks / Roadmap
 
@@ -259,7 +260,7 @@ No separate server needed. For production-like testing, run `npm run build && np
 - `GameState.lastMove` is `{ x, y, player?: PlayerID } | undefined` — tracks last cell for outline highlight & remote move detection
 - `localPlayerId` is `undefined` for pass-and-play, set for online — the `isOurTurn` check in `attemptMove` relies on this
 - `isAnimating` flag prevents input during explosion animations — **do not** bypass
-- Polling interval is 1000ms — don't change without considering server load
+- Polling interval is 300ms — don't change without considering server load
 - Remote moves are animated by reconstructing placed state from previous board + lastMove coordinates
 - `prevMoveKey` tracks the last-seen `lastMove` key; reset to `''` on server reset
 - Server is authoritative for **all** player names; local state must not override other players' names
