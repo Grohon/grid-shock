@@ -108,7 +108,7 @@ function startPolling(gameId: string, localPlayerId: PlayerID) {
   };
 
   poll();
-  pollingRef = window.setInterval(poll, 1000);
+  pollingRef = window.setInterval(poll, 300);
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
