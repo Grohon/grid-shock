@@ -38,6 +38,9 @@ function startPolling(gameId: string, localPlayerId: PlayerID) {
       const { state: serverState } = await res.json();
       const store = useGameStore.getState();
 
+      // Guard: game was cleared since this poll was scheduled
+      if (store.state.gameId !== gameId) return;
+
       // Handle abandoned detection
       if (serverState.abandoned && !store.state.abandoned) {
         useGameStore.setState({
@@ -50,7 +53,6 @@ function startPolling(gameId: string, localPlayerId: PlayerID) {
       const moveKey = serverState.lastMove ? `${serverState.lastMove.x},${serverState.lastMove.y}` : '';
       const isNewMove = moveKey && moveKey !== prevMoveKey;
 
-      let animDuration = 0;
       if (isNewMove) {
         const { x: mx, y: my, player: movingPlayer } = serverState.lastMove!;
 
@@ -69,10 +71,11 @@ function startPolling(gameId: string, localPlayerId: PlayerID) {
             initialPlaced: { ...store.state.initialPlaced, [movingPlayer]: true },
           };
           const steps = getExplosionSteps(placedState);
-          animDuration = steps.length * 500;
+          const animDuration = steps.length * 500;
           for (let i = 1; i < steps.length; i++) {
             setTimeout(() => {
               const s = useGameStore.getState();
+              if (s.state.gameId !== gameId) return;
               useGameStore.setState({
                 state: {
                   ...steps[i],
@@ -84,16 +87,27 @@ function startPolling(gameId: string, localPlayerId: PlayerID) {
               });
             }, i * 500);
           }
+          // Sync to authoritative server state after remote animation
+          setTimeout(() => {
+            const s = useGameStore.getState();
+            if (s.state.gameId !== gameId) return;
+            useGameStore.setState({
+              state: {
+                ...serverState,
+                localPlayerId,
+                isOnline: true,
+                playerStats: s.state.playerStats,
+                playerNames: serverState.playerNames,
+              }
+            });
+          }, animDuration + 100);
         }
         prevMoveKey = moveKey;
       } else if (!moveKey && store.state.lastMove) {
+        // Server reset detected: sync immediately
         prevMoveKey = '';
-      }
-
-      // Sync to authoritative server state after animation completes
-      const animDelay = animDuration > 0 ? animDuration + 100 : 0;
-      setTimeout(() => {
         const s = useGameStore.getState();
+        if (s.state.gameId !== gameId) return;
         useGameStore.setState({
           state: {
             ...serverState,
@@ -103,7 +117,7 @@ function startPolling(gameId: string, localPlayerId: PlayerID) {
             playerNames: serverState.playerNames,
           }
         });
-      }, animDelay);
+      }
     } catch {}
   };
 
@@ -282,7 +296,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     set({ state: afterWin });
 
-    // Submit online move to server for persistence (server broadcasts via WS)
+    // Prevent polling from re-detecting our own move
+    if (state.isOnline) {
+      prevMoveKey = `${x},${y}`;
+    }
+
+    // Submit online move to server for persistence
     if (isOnlineLocal) {
       try {
         await fetch(`${API_BASE}/game/move`, {
