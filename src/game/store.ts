@@ -19,17 +19,20 @@ interface GameStore {
 
 let pollingRef: number | null = null;
 let prevMoveKey = '';
+let localMoveKey = '';
 
 function stopPolling() {
   if (pollingRef !== null) {
     clearInterval(pollingRef);
     pollingRef = null;
   }
+  localMoveKey = '';
 }
 
 function startPolling(gameId: string, localPlayerId: PlayerID) {
   stopPolling();
   prevMoveKey = '';
+  localMoveKey = '';
 
   const poll = async () => {
     try {
@@ -41,12 +44,22 @@ function startPolling(gameId: string, localPlayerId: PlayerID) {
       // Guard: game was cleared since this poll was scheduled
       if (store.state.gameId !== gameId) return;
 
-      // Handle abandoned detection
+      // Handle abandoned detection (always, even with pending local move)
       if (serverState.abandoned && !store.state.abandoned) {
         useGameStore.setState({
           state: { ...store.state, abandoned: true, gameOver: true }
         });
         return;
+      }
+
+      // If we have a pending local move, wait for server confirmation before syncing
+      if (localMoveKey) {
+        if (serverState.lastMove && `${serverState.lastMove.x},${serverState.lastMove.y}` === localMoveKey) {
+          localMoveKey = ''; // Confirmed by server
+          prevMoveKey = localMoveKey;
+        } else {
+          return; // Still pending, skip this poll
+        }
       }
 
       // Detect remote moves
@@ -299,6 +312,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Prevent polling from re-detecting our own move
     if (state.isOnline) {
       prevMoveKey = `${x},${y}`;
+      localMoveKey = `${x},${y}`;
     }
 
     // Submit online move to server for persistence
