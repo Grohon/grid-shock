@@ -25,6 +25,7 @@ function initGameState(rows: number, cols: number, mode: string, _vsComputer: bo
     playerStats: { wins: 0, losses: 0 },
     initialPlaced: { 1: false, 2: false, 3: false, 4: false },
     lastMove: undefined,
+    lastPoll: {},
   };
 }
 

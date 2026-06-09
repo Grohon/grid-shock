@@ -27,6 +27,7 @@ export default async function handler(req: any, res: any) {
   state.abandoned = false;
   state.initialPlaced = { 1: false, 2: false, 3: false, 4: false };
   state.lastMove = undefined;
+  state.lastPoll = {};
 
   await setGame(gameId, state);
   broadcastAll(gameId, { type: 'state', state });
